@@ -252,7 +252,7 @@ function validatePayload(payload, year) {
 
 // 解析缓存串；结构不合法则返回空缓存（静默降级，不抛异常）
 function parseCache(str) {
-    var empty = { years: {}, checkedAt: "" };
+    var empty = { years: {}, checkedAt: "", networkTime: "" };
     if (!str) {
         return empty;
     }
@@ -273,11 +273,19 @@ function parseCache(str) {
             clean[y] = { off: e.off, work: e.work };
         }
     }
-    return { years: clean, checkedAt: typeof obj.checkedAt === "string" ? obj.checkedAt : "" };
+    return {
+        years: clean,
+        checkedAt: typeof obj.checkedAt === "string" ? obj.checkedAt : "",
+        networkTime: typeof obj.networkTime === "string" ? obj.networkTime : ""
+    };
 }
 
 function serializeCache(cache) {
-    return JSON.stringify({ years: cache.years || {}, checkedAt: cache.checkedAt || "" });
+    return JSON.stringify({
+        years: cache.years || {},
+        checkedAt: cache.checkedAt || "",
+        networkTime: cache.networkTime || ""
+    });
 }
 
 // 把某个年份的数据并入缓存，返回新的缓存对象
@@ -287,7 +295,11 @@ function mergeYear(cache, year, off, work) {
         years[y] = cache.years[y];
     }
     years[String(year)] = { off: off, work: work };
-    return { years: years, checkedAt: cache.checkedAt || "" };
+    return {
+        years: years,
+        checkedAt: cache.checkedAt || "",
+        networkTime: cache.networkTime || ""
+    };
 }
 
 // 内置数据已覆盖的年份 + 缓存已覆盖的年份 = 无需再拉取的年份。
@@ -304,15 +316,41 @@ function coveredYears(cache, builtinYears) {
     return out;
 }
 
+// 时间基准年份：优先用上一次联网取回的**服务端时间**，其次才用本机时钟。
+// 这样即使有人把系统时间改到 2030 年或 2020 年，也只会影响「还没联网过」的那一次，
+// 一旦成功联网过，判断依据就固定为网络时间。
+function referenceYear(cache, localNow) {
+    var t = cache && cache.networkTime ? new Date(cache.networkTime) : null;
+    if (t && !isNaN(t.getTime())) {
+        return t.getFullYear();
+    }
+    return localNow.getFullYear();
+}
+
+// 本机时钟与网络时间的偏差（天）。无网络时间参考时返回 null。
+function clockSkewDays(cache, localNow) {
+    var t = cache && cache.networkTime ? new Date(cache.networkTime) : null;
+    if (!t || isNaN(t.getTime())) {
+        return null;
+    }
+    return Math.round((localNow.getTime() - t.getTime()) / 86400000);
+}
+
 // 需要联网获取的年份：从「最新已覆盖年份 + 1」一直排到「次年」，
 // 因此中途遗漏的年份都会被补回来。
 //
 // 早期版本写死为 [当年, 次年]，会漏掉「某年忘记更新」的情形：例如 2027 年
 // 没更新、2028 年 1 月才点，旧规则只取 2028/2029，2027 永远不会被补齐。
 //
-// 返回完整列表（不截断），由调用方按 MAX_YEARS_PER_RUN 分批。
+// 返回按**优先级**排序的完整列表（不截断），由调用方按 MAX_YEARS_PER_RUN 分批：
+//   第一优先：当年、次年            —— 最要紧，必须最先拿到
+//   第二优先：中间空档，由新到旧      —— 补得上最好，补不上也不影响前面
+//
+// 「空档排在后面」是刻意的：某些年份的数据源可能永远不存在（该补不回来），
+// 若按由旧到新排序，这些空档会一直占着每次的配额，把当年的数据挤掉。
 function yearsToFetch(cache, now, builtinYears) {
     var covered = coveredYears(cache, builtinYears);
+    var refYear = referenceYear(cache, now);
     var newest = 0;
     for (var y in covered) {
         var n = Number(y);
@@ -320,17 +358,28 @@ function yearsToFetch(cache, now, builtinYears) {
             newest = n;
         }
     }
-    // 完全没有已知数据时（内置表为空、缓存也为空）兜底取最近两年，
-    // 避免从 1 年一路排到今年。
-    var start = newest > 0 ? newest + 1 : Math.max(1, now.getFullYear() - 1);
-    var out = [];
-    for (var year = start; year <= now.getFullYear() + 1; year++) {
-        out.push(year);
+
+    var essential = [];
+    for (var e = refYear; e <= refYear + 1; e++) {
+        if (!covered.hasOwnProperty(String(e))) {
+            essential.push(e);
+        }
     }
-    return out;
+
+    // 空档：从最新已覆盖年份往后到当年之前。完全没有已知数据时（内置表与缓存
+    // 都为空）兜底覆盖最近两年，避免从 1 年一路排到今年。
+    var start = newest > 0 ? newest + 1 : Math.max(1, refYear - 1);
+    var gaps = [];
+    for (var g = start; g < refYear; g++) {
+        gaps.push(g);
+    }
+    gaps.reverse();                     // 由新到旧
+
+    return essential.concat(gaps);
 }
 
-// 距上次检查是否已超过间隔
+// 距上次检查是否已超过间隔。用时间基准年份对齐后再比较，
+// 避免本机时钟被改动导致「永远不检查」或「每次启动都检查」。
 function shouldAutoCheck(cache, now) {
     if (!cache.checkedAt) {
         return true;
@@ -339,7 +388,11 @@ function shouldAutoCheck(cache, now) {
     if (isNaN(last.getTime())) {
         return true;
     }
-    var days = (now.getTime() - last.getTime()) / 86400000;
+    var ref = cache && cache.networkTime ? new Date(cache.networkTime) : null;
+    if (!ref || isNaN(ref.getTime())) {
+        ref = now;                      // 没有网络时间参考时才用本机时钟
+    }
+    var days = (ref.getTime() - last.getTime()) / 86400000;
     return days >= AUTO_CHECK_INTERVAL_DAYS;
 }
 
@@ -360,8 +413,11 @@ function countKeys(obj) {
     return n;
 }
 
-// 单次 HTTP GET，回调 (status, parsedJsonOrNull)。
+// 单次 HTTP GET，回调 (status, parsedJsonOrNull, serverTimeIso 或 "")。
 // XMLHttpRequest 在 .pragma library 脚本里同样可用（已实测）。
+//
+// serverTimeIso 取自响应的 Date 头（CORS 安全头，跨域也可读），用于绕开
+// 「本机时钟被改动」带来的判断偏差——年份该取哪些只依赖网络时间。
 function fetchJson(url, onDone) {
     var xhr = new XMLHttpRequest();
     xhr.onreadystatechange = function () {
@@ -374,15 +430,25 @@ function fetchJson(url, onDone) {
         } catch (e) {
             parsed = null;
         }
-        onDone(xhr.status, parsed);
+        var serverTime = "";
+        try {
+            var h = xhr.getResponseHeader("Date");
+            if (h) {
+                var d = new Date(h);
+                if (!isNaN(d.getTime())) {
+                    serverTime = d.toISOString();
+                }
+            }
+        } catch (e) { }
+        onDone(xhr.status, parsed, serverTime);
     };
     xhr.open("GET", url, true);
     xhr.timeout = 15000;
     xhr.ontimeout = function () {
-        onDone(0, null);            // 0 = 超时/传输失败
+        onDone(0, null, "");        // 0 = 超时/传输失败
     };
     xhr.onerror = function () {
-        onDone(0, null);
+        onDone(0, null, "");
     };
     xhr.send();
 }
@@ -397,6 +463,8 @@ function runUpdate(cache, now, builtinYears, onProgress, onDone) {
     var result = { cache: cache, fetched: [], failed: [], notPublished: [],
                    remaining: 0, messages: [] };
     var all = yearsToFetch(cache, now, builtinYears);
+    var refYear = referenceYear(cache, now);
+    var observedNetworkTime = "";
     var years = all.slice(0, MAX_YEARS_PER_RUN);
     result.remaining = all.length - years.length;
 
@@ -415,7 +483,22 @@ function runUpdate(cache, now, builtinYears, onProgress, onDone) {
                 result.messages.push("还有 " + result.remaining
                     + " 个年份的数据待获取，请再点一次「立即更新」继续。");
             }
-            result.cache = { years: result.cache.years, checkedAt: now.toISOString() };
+            var netTime = observedNetworkTime || cache.networkTime || "";
+            // 本机时钟与网络时间明显不符时说明一句：年份判断已改用网络时间，
+            // 本机时间不准不会影响更新。
+            if (observedNetworkTime) {
+                var skew = Math.round((now.getTime()
+                    - new Date(observedNetworkTime).getTime()) / 86400000);
+                if (Math.abs(skew) >= 2) {
+                    result.messages.push("提示：本机时间与网络时间相差约 " + Math.abs(skew)
+                        + " 天，年份判断已改用网络时间（本机时间不准不影响更新）。");
+                }
+            }
+            result.cache = {
+                years: result.cache.years,
+                checkedAt: now.toISOString(),
+                networkTime: netTime
+            };
             onDone(result);
             return;
         }
@@ -430,8 +513,15 @@ function runUpdate(cache, now, builtinYears, onProgress, onDone) {
                 if (sawNotPublished) {
                     // 预期内的正常状态：给出中性说明，不算失败
                     result.notPublished.push(year);
-                    result.messages.push(
-                        year + " 年：放假安排尚未发布（通常在上一年 11 月上旬公布）");
+                    if (year < refYear) {
+                        // 过去的年份数据源里没有 —— 补不上也没关系，明确告知，
+                        // 避免看起来像每次更新都在出错。
+                        result.messages.push(
+                            year + " 年：数据源中不存在，已跳过（不影响其它年份）");
+                    } else {
+                        result.messages.push(
+                            year + " 年：放假安排尚未发布（通常在上一年 11 月上旬公布）");
+                    }
                 } else {
                     result.failed.push(year);
                     result.messages.push(year + " 年：更新失败 — " + reasons.join("；"));
@@ -442,7 +532,10 @@ function runUpdate(cache, now, builtinYears, onProgress, onDone) {
             }
             var url = urls[ui];
             progress("正在获取 " + year + " 年数据…（源 " + (ui + 1) + "/" + urls.length + "）");
-            fetchJson(url, function (status, payload) {
+            fetchJson(url, function (status, payload, serverTime) {
+                if (serverTime && !observedNetworkTime) {
+                    observedNetworkTime = serverTime;
+                }
                 if (status !== 200) {
                     // 404 表示该年份的文件还不存在 —— 与「只有占位文件」同义，
                     // 都是「尚未发布」这一预期内的状态，不该标成失败。
