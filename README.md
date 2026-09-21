@@ -1,19 +1,22 @@
 # 农历月历 · Lunar Calendar (KDE Plasma 6)
 
-一个常驻桌面的月历小组件，通过 KDE 官方的 `alternatecalendar` 日历引擎显示中国农历。
+一个常驻桌面的月历小组件，通过 KDE 官方的 `alternatecalendar` 日历引擎显示中国农历，
+并可选显示**自定义「学期周数」**（以开学日为第 1 周）。
 
 <img src="screenshot.png" width="420" alt="农历月历截图">
 
 > **English:** A desktop calendar plasmoid for KDE Plasma 6 that displays the Chinese lunar
-> calendar (农历). It reuses KDE's own `alternatecalendar` calendar plugin engine — the same
-> engine behind the Digital Clock's calendar popup — so the lunar data is not reimplemented
-> here, and it shares the calendar-system setting with the system tray clock.
+> calendar (农历), plus an optional custom term/semester week-number column (e.g. "week 1 =
+> the week the school term starts"). It reuses KDE's own `alternatecalendar` calendar plugin
+> engine — the same engine behind the Digital Clock's calendar popup — so the lunar data is
+> not reimplemented here, and it shares the calendar-system setting with the system tray clock.
 
 ## 特性
 
 - 常驻桌面的月历，每个日期下方显示农历（初一、十五……）与节气（白露、秋分、寒露……）
 - 农历数据来自 KDE 官方引擎（`plasma-calendar-addons` 提供的 `alternatecalendar` 插件），
   与系统托盘时钟共享同一份配置 —— **不是自己算的**
+- **可选的自定义学期周数列**：以指定的开学日为第 1 周，按周递增（详见下节）
 - 自动刷新：跨天更新「今天」高亮，跨月自动回到当前月
 - 纯 QML，无需编译；约 4 MB 内存
 
@@ -28,7 +31,6 @@
 | 本组件 | ✅ 直接复用官方引擎 |
 
 KDE 有一个 2020 年就提出的 feature request（为主日历组件加备用历法支持），至今未合入。
-本组件用约 120 行 QML 补上这个缺口。
 
 ## 安装
 
@@ -53,6 +55,27 @@ kpackagetool6 --type Plasma/Applet --install .
 kpackagetool6 --type Plasma/Applet --remove io.github.helloydh007.lunarcalendar
 ```
 
+## 学期周数（自定义周数）
+
+月历左侧可以显示一列自定义周数，用于「开学那一周算第 1 周」这类需求。
+
+**配置方式**：在组件上点右键 → 「配置农历月历…」→
+
+- 勾选「在月历左侧显示周数」
+- 填入「第 1 周起始日」，格式 `yyyy-MM-dd`，例如 `2026-09-01`
+- 旁边有「今天 / 本周首日 / 本月 1 日」三个快捷按钮，下方会实时预览「今天属于第几周」
+
+**规则**：
+
+- 起始日只要落在第 1 周内的任意一天即可 —— 程序会自动折到该周的首日。
+  所以填「开学日 9 月 1 日（周二）」与填「8 月 31 日（周一）」结果完全相同。
+- 每周的首日按系统区域设置（`zh_CN` 为周一）。
+- **早于第 1 周的日期不显示数字**（留空），不会出现负数。
+- 周次会一直递增，跨月、跨年都正确。
+
+以起始日 `2026-09-01` 为例，九月的六行显示 `1 2 3 4 5 6`；把起始日改到 `2026-09-28`
+后，只有最后两行显示 `1 2`，前四行留空。
+
 ## 依赖
 
 - KDE Plasma **6.0+**（`X-Plasma-API-Minimum-Version: 6.0`）
@@ -67,7 +90,7 @@ sudo apt install plasma-workspace plasma-calendar-addons
 
 ## 实现要点（踩过的坑）
 
-如果你想基于 `MonthView` 写自己的组件，这四条能省你几个小时。
+如果你想基于 `MonthView` 写自己的组件，这五条能省你几个小时。
 
 ### 1. `main.qml` 的根元素必须是 `PlasmoidItem`
 
@@ -120,12 +143,30 @@ MonthView { today: dataSource.data["Local"]["DateTime"] }
 
 每个日期格子要放下两层文字（公历数字 + 农历），高度不足时两层会叠印在一起。
 
+### 5. 自定义周数列怎么对齐到日历行
+
+`MonthView` 内建的周数列只支持 ISO 周数（数据来自后端 `weeksModel`），**无法注入自定义
+编号**，所以本组件的周数列是自己画在左边的。对齐靠 `MonthView` 暴露的几何参数：
+
+```qml
+anchors.topMargin: monthView.viewHeader.height + monthView.cellHeight + 2 * monthView.borderWidth
+spacing: monthView.borderWidth          // 每项高度 = monthView.cellHeight
+```
+
+行起始日直接从 `monthView.daysModel` 读取（索引 `0,7,14,21,28,35` 即每行首日，角色为
+`yearNumber` / `monthNumber` / `dayNumber`），不做任何推算 —— 因此与「月首是周几」「用哪套
+历法」都无关。
+
+**不要把这些值硬编码**：它们随字体、面板缩放、组件尺寸变化，硬编码会在别的机器上错位。
+
 ## 已知限制
 
 - 只在**中国农历**下做了验证。引擎本身也支持希伯来历、伊斯兰历等，改系统托盘时钟的
   日历设置即可共享同一份配置。
+- 学期周数只支持一组自定义起点；不能同时显示 ISO 周数与自定义周数。
 - 跨月时如果你正翻看其它月份，视图会回到当前月（每月最多一次）。
-- 桌面容器的初始摆放可能给组件一个很小的尺寸，拖入后请自行拉伸。
+- 添加/删除桌面组件后 Plasma 可能重新排布桌面并改变本组件尺寸；若被压得过矮，农历文字
+  会与公历数字叠印，拖一下边角放大即可。
 
 ## 许可
 

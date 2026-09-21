@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd" >
+  <kcfgfile name=""/>
+
+  <group name="General">
+    <!-- 是否在月历左侧显示自定义「学期周数」列 -->
+    <entry name="showTermWeeks" type="Bool">
+      <default>false</default>
+    </entry>
+    <!-- 第 1 周的起始日，ISO 格式 yyyy-MM-dd；空表示未设置 -->
+    <entry name="termStart" type="String">
+      <default></default>
+    </entry>
+  </group>
+</kcfg>

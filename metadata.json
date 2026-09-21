@@ -7,13 +7,13 @@
             }
         ],
         "Category": "Date and Time",
-        "Description": "一个常驻桌面的月历组件，通过 KDE 官方 alternatecalendar 引擎显示中国农历，数据与系统托盘时钟完全同源。A desktop lunar calendar plasmoid for KDE Plasma 6.",
+        "Description": "一个常驻桌面的月历组件，通过 KDE 官方 alternatecalendar 引擎显示中国农历；可选显示自定义「学期周数」（以指定的开学日为第 1 周）。A desktop lunar calendar plasmoid for KDE Plasma 6, with optional custom term/semester week numbers.",
         "EnabledByDefault": true,
         "Icon": "view-calendar",
         "Id": "io.github.helloydh007.lunarcalendar",
         "License": "GPL-2.0+",
         "Name": "农历月历 (Lunar Calendar)",
-        "Version": "1.0.0",
+        "Version": "1.1.0",
         "Website": "https://github.com/helloydh007/plasma-lunar-calendar"
     },
     "X-Plasma-API-Minimum-Version": "6.0"
