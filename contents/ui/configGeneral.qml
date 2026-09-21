@@ -36,6 +36,8 @@ KCMUtils.SimpleKCM {
 
     property bool updating: false
     property string updateStatus: ""
+    // 只有「真失败」才标红；「尚未发布」是预期内的正常状态，用中性色
+    property bool updateHadError: false
 
     // 不展示，仅作为 cfg_ 的载体（SimpleKCM 通过 cfg_ 前缀属性读写配置）
     QQC2.TextField { id: modeHolder; visible: false; width: 0; height: 0 }
@@ -60,7 +62,11 @@ KCMUtils.SimpleKCM {
             },
             function (result) {
                 page.updating = false;
+                page.updateHadError = result.failed.length > 0;
                 let txt = result.messages.join("\n");
+                if (result.fetched.length === 0 && result.failed.length === 0) {
+                    txt += "\n" + i18n("当前数据已是最新，无需处理。");
+                }
                 if (result.fetched.length > 0) {
                     cacheHolder.text = HolidaysNet.serializeCache(result.cache);
                     page.configurationChanged();
@@ -143,9 +149,9 @@ KCMUtils.SimpleKCM {
             wrapMode: Text.WordWrap
             visible: page.updateStatus !== ""
             text: page.updateStatus
-            color: text.indexOf("✓") >= 0 ? Kirigami.Theme.positiveTextColor
-                 : (text.indexOf("✗") >= 0 || text.indexOf("HTTP") >= 0
-                    ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor)
+            color: page.updateHadError ? Kirigami.Theme.negativeTextColor
+                 : (text.indexOf("✓") >= 0 ? Kirigami.Theme.positiveTextColor
+                    : Kirigami.Theme.textColor)
         }
 
         QQC2.Switch {

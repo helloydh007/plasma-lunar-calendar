@@ -184,10 +184,13 @@ function sanityProblems(off, work, year) {
 }
 
 // 校验一份数据源 payload。
-// 返回 { ok: bool, error: string, off: {}, work: {}, papers: [] }
+// 返回 { ok, error, notPublished, off, work, papers }
+//   notPublished = true 表示「该年份的数据源只有占位文件」，这是**预期内的正常状态**
+//   （放假安排逐年发布），调用方应据此给出中性提示而非报错。
 function validatePayload(payload, year) {
-    var fail = function (msg) {
-        return { ok: false, error: msg, off: {}, work: {}, papers: [] };
+    var fail = function (msg, notPublished) {
+        return { ok: false, error: msg, notPublished: notPublished === true,
+                 off: {}, work: {}, papers: [] };
     };
 
     if (!payload || typeof payload !== "object") {
@@ -198,7 +201,7 @@ function validatePayload(payload, year) {
     }
     var days = payload.days;
     if (!days || !days.length) {
-        return fail("数据源里 " + year + ".json 的 days 为空（该年份可能尚未发布）");
+        return fail("数据源里 " + year + ".json 的 days 为空", true);
     }
 
     var off = {}, work = {}, papers = [];
@@ -374,11 +377,12 @@ function fetchJson(url, onDone) {
 // 任一源返回的、通过校验的数据才会被采用；未通过的会记录原因并尝试下一个源。
 function runUpdate(cache, now, builtinYears, onProgress, onDone) {
     var progress = onProgress || function () {};
-    var result = { cache: cache, fetched: [], failed: [], messages: [] };
+    var result = { cache: cache, fetched: [], failed: [], notPublished: [], messages: [] };
     var years = yearsToFetch(cache, now, builtinYears);
 
     if (!years.length) {
-        result.messages.push("内置数据与缓存已覆盖 " + now.getFullYear() + " 年及次年，无需联网更新");
+        result.messages.push("已是最新：内置数据与缓存已覆盖 " + now.getFullYear()
+                             + " 年及次年，无需联网更新");
         onDone(result);
         return;
     }
@@ -394,11 +398,20 @@ function runUpdate(cache, now, builtinYears, onProgress, onDone) {
         var year = years[yi];
         var urls = urlsFor(year);
         var ui = 0;
+        var sawNotPublished = false;      // 是否见过「只有占位文件」的源
+        var reasons = [];                 // 各源的失败原因，最后汇总成一条
 
         function tryUrl() {
             if (ui >= urls.length) {
-                result.failed.push(year);
-                result.messages.push(year + " 年：所有数据源都未取到可用数据");
+                if (sawNotPublished) {
+                    // 预期内的正常状态：给出中性说明，不算失败
+                    result.notPublished.push(year);
+                    result.messages.push(
+                        year + " 年：放假安排尚未发布（通常在上一年 11 月上旬公布）");
+                } else {
+                    result.failed.push(year);
+                    result.messages.push(year + " 年：更新失败 — " + reasons.join("；"));
+                }
                 yi += 1;
                 nextYear();
                 return;
@@ -407,14 +420,17 @@ function runUpdate(cache, now, builtinYears, onProgress, onDone) {
             progress("正在获取 " + year + " 年数据…（源 " + (ui + 1) + "/" + urls.length + "）");
             fetchJson(url, function (status, payload) {
                 if (status !== 200) {
-                    result.messages.push(year + " 年：HTTP " + status + "（" + hostOf(url) + "）");
+                    reasons.push("HTTP " + status + "（" + hostOf(url) + "）");
                     ui += 1;
                     tryUrl();
                     return;
                 }
                 var v = validatePayload(payload, year);
                 if (!v.ok) {
-                    result.messages.push(year + " 年：" + v.error + "（" + hostOf(url) + "）");
+                    if (v.notPublished) {
+                        sawNotPublished = true;
+                    }
+                    reasons.push(v.error + "（" + hostOf(url) + "）");
                     ui += 1;
                     tryUrl();
                     return;
