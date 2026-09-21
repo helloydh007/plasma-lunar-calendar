@@ -56,6 +56,9 @@ PlasmoidItem {
     // 表示层重建计数器。跨月时 +1，触发日历重建以显示新的当前月。
     property int generation: 0
 
+    // 自动更新是否正在进行：防止慢网络下每小时定时器与上一次请求重叠。
+    property bool holidayUpdating: false
+
     // 每行起始日（索引 0…rows-1），由下方 Repeater 从 daysModel 填充。
     property var rowStartDates: []
 
@@ -118,11 +121,16 @@ PlasmoidItem {
         triggeredOnStart: true
 
         onTriggered: {
+            if (root.holidayUpdating) {
+                return;                 // 上一次还没结束，跳过本轮
+            }
             const now = new Date();
             if (!HolidaysNet.shouldAutoCheck(root.holidayCache, now)) {
                 return;
             }
+            root.holidayUpdating = true;
             HolidaysNet.runUpdate(root.holidayCache, now, Holidays.COVERED_YEARS, null, function (result) {
+                root.holidayUpdating = false;
                 if (result.fetched.length > 0) {
                     Plasmoid.configuration.holidayCache = HolidaysNet.serializeCache(result.cache);
                     console.log("holidays: 自动更新成功，年份 " + result.fetched.join(", "));
@@ -195,21 +203,33 @@ PlasmoidItem {
                     model: monthView.daysModel
 
                     delegate: Item {
+                        id: rowStartReader
+
                         required property int index
                         required property var model
+
+                        // 用绑定读取（而不是只在创建时读一次）：DaysModel 换月时
+                        // 若只发 dataChanged 而不重置模型，一次性读取会留下陈旧日期，
+                        // 结果是周数与节假日标记停留在旧月份。stamp 变化即重新发布。
+                        readonly property string stamp: model.yearNumber + "/"
+                            + model.monthNumber + "/" + model.dayNumber
 
                         visible: false
                         width: 0
                         height: 0
 
-                        Component.onCompleted: {
-                            if (index % 7 === 0) {
-                                const arr = root.rowStartDates.slice();
-                                arr[Math.floor(index / 7)] =
-                                    new Date(model.yearNumber, model.monthNumber - 1, model.dayNumber);
-                                root.rowStartDates = arr;
+                        function publish() {
+                            if (index % 7 !== 0) {
+                                return;
                             }
+                            const arr = root.rowStartDates.slice();
+                            arr[Math.floor(index / 7)] =
+                                new Date(model.yearNumber, model.monthNumber - 1, model.dayNumber);
+                            root.rowStartDates = arr;
                         }
+
+                        onStampChanged: publish()
+                        Component.onCompleted: publish()
                     }
                 }
 

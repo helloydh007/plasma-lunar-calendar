@@ -36,6 +36,9 @@ KCMUtils.SimpleKCM {
 
     property bool updating: false
     property string updateStatus: ""
+    // 配置页可能在更新途中被关闭；销毁后回调不再触碰本页属性
+    property bool alive: true
+    Component.onDestruction: alive = false
     // 只有「真失败」才标红；「尚未发布」是预期内的正常状态，用中性色
     property bool updateHadError: false
 
@@ -58,9 +61,15 @@ KCMUtils.SimpleKCM {
         const cache = HolidaysNet.parseCache(cacheHolder.text);
         HolidaysNet.runUpdate(cache, new Date(), Holidays.COVERED_YEARS,
             function (msg) {
+                if (!page.alive) {
+                    return;
+                }
                 page.updateStatus = msg;
             },
             function (result) {
+                if (!page.alive) {
+                    return;
+                }
                 page.updating = false;
                 page.updateHadError = result.failed.length > 0;
                 let txt = result.messages.join("\n");
