@@ -113,10 +113,6 @@ kpackagetool6 --type Plasma/Applet --remove io.github.helloydh007.lunarcalendar
 | 2025 年安排（国办发明电〔2024〕7 号） | 2024-11-12 |
 | 2026 年安排（国办发明电〔2025〕7 号） | 2025-11-04 |
 
-**去哪找**：中国政府网（gov.cn）→ 政策文件库，搜索
-「**国务院办公厅关于XXXX年部分节假日安排的通知**」。通知也会被各大门户转载，
-但建议以政府网原文为准。
-
 **调休日就在通知正文里**，无需推算。原文对每个节日都写成两句，例如 2026 年春节：
 
 > 春节：2月15日（农历腊月二十八、周日）至23日（农历正月初七、周一）放假调休，
@@ -124,14 +120,48 @@ kpackagetool6 --type Plasma/Applet --remove io.github.helloydh007.lunarcalendar
 
 前半句是放假区间，**后半句「X月X日（周六）上班」就是调休补班日**。
 
-**更新步骤**：
+#### 方式一：一条命令自动更新（推荐）
 
-1. 编辑 `contents/ui/holidays.js`（已安装的组件在
-   `~/.local/share/plasma/plasmoids/<组件ID>/contents/ui/holidays.js`）：
-   - 放假日追加到 `OFF`，补班日追加到 `WORK`，格式 `"yyyy-MM-dd": "节日名"`
-   - 更新 `COVERED_YEARS`
-2. **运行校验工具**（见下），确认没有录入错误
-3. 重启 plasmashell 让改动生效：`systemctl --user restart plasma-plasmashell.service`
+```bash
+python3 tools/update-from-web.py 2027 --write
+```
+
+它会从 [holiday-cn](https://github.com/NateScarlet/holiday-cn)（社区维护的放假安排数据集，
+覆盖 2007–2026，每条都标注对应的国务院办公厅通知原文 URL）拉取数据，然后：
+
+1. 结构校验：字段齐备、年份匹配，并确认数据源标注了 gov.cn 通知原文
+2. 自检：放假/补班不重叠、补班日是周末、区间连续、落在天文窗口内、天数合理
+3. 与已有数据比对，列出差异（这一步同时也是对已有数据的独立审计）
+4. 打印对照表供你与通知原文核对
+5. 写入 `contents/ui/holidays.js`，并自动运行 `verify-holidays.py` 复核
+
+不加 `--write` 就是只预览。**未发布的年份会被识别并明确告知**（数据源对未发布年份只有
+占位文件），不会写入任何东西。
+
+#### 方式二：手工编辑
+
+编辑 `contents/ui/holidays.js`（已安装的组件在
+`~/.local/share/plasma/plasmoids/<组件ID>/contents/ui/holidays.js`），在 `OFF` / `WORK`
+中追加条目、更新 `COVERED_YEARS`，然后运行 `tools/verify-holidays.py` 校验。
+两种方式最后都需要重启 plasmashell 生效：
+
+```bash
+systemctl --user restart plasma-plasmashell.service
+```
+
+#### 为什么是「更新时联网」而不是「运行时联网」
+
+不少公开的节假日 API 存在（例如 timor.tech、holiday-cn、各商业 API），但本组件**刻意不在
+运行时请求网络**：
+
+- **断网也必须能用**。桌面日历在无网、代理异常时应该照常显示，内置数据是永远可用的兜底。
+- **不该后台外发请求**。一个日历组件定时向外发请求，行为上不透明。
+- **第三方接口的可用性无法保证**。实测中 timor.tech 已返回 HTTP 403（被 Cloudflare 人机
+  验证拦截）——依赖它的组件会直接失效。
+- **错误数据的代价太高**。节假日会实际影响行程安排，"接口返回什么就显示什么"风险太大；
+  放进更新流程里，就有一道人工核对 + 自动校验的关口。
+
+所以把联网放在**你主动更新的那一刻**：一次命令完成拉取、校验、生成，之后组件照旧离线运行。
 
 ### 校验工具
 
