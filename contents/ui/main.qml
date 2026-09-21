@@ -44,6 +44,7 @@ import org.kde.plasma.components as PlasmaComponents
 import org.kde.plasma.workspace.calendar as PlasmaCalendar
 
 import "termweek.js" as TermWeek
+import "holidays.js" as Holidays
 
 PlasmoidItem {
     id: root
@@ -61,6 +62,19 @@ PlasmoidItem {
     readonly property var termStartDate: TermWeek.parseIsoDate(Plasmoid.configuration.termStart)
     readonly property bool termWeeksVisible: Plasmoid.configuration.showTermWeeks
         && termStartDate !== null
+    readonly property bool holidaysVisible: Plasmoid.configuration.showHolidays
+
+    // 第 index 个日期格子（0 … rows*cols-1）对应的日期。
+    // 月历网格固定 7 列；行首日期由下方 Repeater 从官方 daysModel 读入，
+    // 列偏移按天数相加，Date 会自行处理跨月进位。
+    function cellDateAt(index) {
+        const rowStart = rowStartDates[Math.floor(index / 7)];
+        if (!rowStart) {
+            return null;
+        }
+        return new Date(rowStart.getFullYear(), rowStart.getMonth(),
+                        rowStart.getDate() + (index % 7));
+    }
 
     // 首次拖到桌面时的默认尺寸。注意桌面容器存下来的几何值会比实际
     // 内容区大约 48px，所以 ItemGeometries 里存 464x464 左右较合适。
@@ -222,21 +236,106 @@ PlasmoidItem {
                 }
             }
 
-            // ── 官方月历 ──────────────────────────────────────────────
-            PlasmaCalendar.MonthView {
-                id: monthView
-
+            // ── 官方月历 + 节假日标记 ──────────────────────────────────
+            Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
 
-                eventPluginsManager: eventPluginsManager
+                PlasmaCalendar.MonthView {
+                    id: monthView
 
-                // 不要改成 currentDate：那是「被选中的日期」，
-                // 不是显示月份的驱动入口。
-                today: root.today
+                    anchors.fill: parent
 
-                // 内建的 ISO 周数列保持关闭——自定义周数列见上。
-                showWeekNumbers: false
+                    eventPluginsManager: eventPluginsManager
+
+                    // 不要改成 currentDate：那是「被选中的日期」，
+                    // 不是显示月份的驱动入口。
+                    today: root.today
+
+                    // 内建的 ISO 周数列保持关闭——自定义周数列见上。
+                    showWeekNumbers: false
+                }
+
+                // 法定节假日（休）/ 调休上班（班）标记层。
+                // 官方网格的文字无法注入，所以在格子上叠一层自己的标记。
+                Item {
+                    id: holidayLayer
+
+                    anchors.fill: parent
+                    visible: root.holidaysVisible
+
+                    // 按 DaysCalendar 的公式反推格子几何，勿硬编码像素：
+                    //   cellWidth    = floor((width - (columns+1)*borderWidth) / columns)
+                    //   第 j 列左边界 = borderWidth + j * (cellWidth + borderWidth)
+                    //   第 i 行上边界 = viewHeader.height + cellHeight + 2*borderWidth
+                    //                  + i * (cellHeight + borderWidth)
+                    readonly property int cols: monthView.columns
+                    readonly property int bw: monthView.borderWidth
+                    readonly property int cw: Math.max(1, Math.floor((monthView.width - (cols + 1) * bw) / cols))
+                    readonly property int ch: monthView.cellHeight
+                    readonly property int gridTop: monthView.viewHeader.height + ch + 2 * bw
+
+                    Repeater {
+                        model: holidayLayer.cols * monthView.rows
+
+                        delegate: Item {
+                            id: cellMarker
+
+                            required property int index
+
+                            readonly property var cellDate: root.cellDateAt(index)
+                            readonly property var holiday: cellDate
+                                ? Holidays.statusFor(cellDate.getFullYear(),
+                                                     cellDate.getMonth() + 1,
+                                                     cellDate.getDate())
+                                : null
+
+                            // 覆盖整个格子（而不只是小标记），这样悬停整格都能看提示。
+                            // 未命中节假日的格子不可见 → 不拦截任何鼠标事件。
+                            width: holidayLayer.cw
+                            height: holidayLayer.ch
+                            x: holidayLayer.bw
+                                + (index % holidayLayer.cols) * (holidayLayer.cw + holidayLayer.bw)
+                            y: holidayLayer.gridTop
+                                + Math.floor(index / holidayLayer.cols) * (holidayLayer.ch + holidayLayer.bw)
+                            visible: holiday !== null
+
+                            Rectangle {
+                                anchors.top: parent.top
+                                anchors.right: parent.right
+                                anchors.topMargin: 1
+                                anchors.rightMargin: 1
+
+                                width: Math.min(18, Math.max(12, Math.round(cellMarker.width * 0.5)))
+                                height: Math.max(9, Math.round(cellMarker.height * 0.22))
+                                radius: 3
+                                color: cellMarker.holiday && cellMarker.holiday.type === "off"
+                                    ? "#c0392b"   // 放假
+                                    : "#6b7280"   // 调休上班
+
+                                PlasmaComponents.Label {
+                                    anchors.centerIn: parent
+                                    color: "white"
+                                    font.pixelSize: Math.max(7, Math.round(parent.height * 0.7))
+                                    text: cellMarker.holiday && cellMarker.holiday.type === "off"
+                                        ? i18n("休") : i18n("班")
+                                }
+                            }
+
+                            HoverHandler {
+                                id: markerHover
+                            }
+
+                            PlasmaComponents.ToolTip.delay: 400
+                            PlasmaComponents.ToolTip.visible: markerHover.hovered
+                            PlasmaComponents.ToolTip.text: cellMarker.holiday
+                                ? (cellMarker.holiday.type === "off"
+                                    ? i18n("%1：放假", cellMarker.holiday.name)
+                                    : i18n("%1：调休上班", cellMarker.holiday.name))
+                                : ""
+                        }
+                    }
+                }
             }
         }
     }

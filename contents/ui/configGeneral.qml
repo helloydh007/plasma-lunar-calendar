@@ -17,12 +17,20 @@ import org.kde.kcmutils as KCMUtils
 import org.kde.kirigami as Kirigami
 
 import "termweek.js" as TermWeek
+import "holidays.js" as Holidays
 
 KCMUtils.SimpleKCM {
     id: page
 
     property alias cfg_showTermWeeks: showSwitch.checked
     property alias cfg_termStart: termStartField.text
+    property alias cfg_showHolidays: showHolidaysSwitch.checked
+
+    // 内置节假日数据的覆盖年份（次年安排发布后需更新 holidays.js）
+    readonly property string coveredYears: {
+        const v = Holidays.COVERED_YEARS;
+        return v.length > 0 ? v[0] + "–" + v[v.length - 1] : i18n("无");
+    }
 
     readonly property var parsedStart: TermWeek.parseIsoDate(termStartField.text)
 
@@ -39,6 +47,22 @@ KCMUtils.SimpleKCM {
     }
 
     Kirigami.FormLayout {
+        QQC2.Switch {
+            id: showHolidaysSwitch
+
+            Kirigami.FormData.label: i18n("法定节假日：")
+            text: i18n("在日期上标记「休 / 班」")
+            onToggled: page.configurationChanged()
+        }
+
+        QQC2.Label {
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 22
+            wrapMode: Text.WordWrap
+            opacity: 0.75
+            text: i18n("放假安排由国务院逐年发文规定（含调休补班），无法由历法推算，因此使用内置数据表。当前覆盖：%1 年。",
+                page.coveredYears)
+        }
+
         QQC2.Switch {
             id: showSwitch
 

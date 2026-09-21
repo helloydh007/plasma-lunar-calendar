@@ -14,5 +14,9 @@
     <entry name="termStart" type="String">
       <default></default>
     </entry>
+    <!-- 是否在日期格子上标记法定节假日（休）与调休上班日（班） -->
+    <entry name="showHolidays" type="Bool">
+      <default>true</default>
+    </entry>
   </group>
 </kcfg>
