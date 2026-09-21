@@ -45,6 +45,7 @@ import org.kde.plasma.workspace.calendar as PlasmaCalendar
 
 import "termweek.js" as TermWeek
 import "holidays.js" as Holidays
+import "holidays-update.js" as HolidaysNet
 
 PlasmoidItem {
     id: root
@@ -63,6 +64,10 @@ PlasmoidItem {
     readonly property bool termWeeksVisible: Plasmoid.configuration.showTermWeeks
         && termStartDate !== null
     readonly property bool holidaysVisible: Plasmoid.configuration.showHolidays
+
+    // 联网获取到的节假日数据（只含内置数据未覆盖的年份）。配置里的 JSON 串
+    // 解析失败时静默降级为空缓存，此时仅使用内置数据。
+    readonly property var holidayCache: HolidaysNet.parseCache(Plasmoid.configuration.holidayCache)
 
     // 第 index 个日期格子（0 … rows*cols-1）对应的日期。
     // 月历网格固定 7 列；行首日期由下方 Repeater 从官方 daysModel 读入，
@@ -99,6 +104,33 @@ PlasmoidItem {
             if (monthChanged) {
                 root.generation += 1;
             }
+        }
+    }
+
+    // 自动更新：仅当配置为 auto 时才动作。每小时核对一次节律，
+    // 真正联网拉取受 AUTO_CHECK_INTERVAL_DAYS（30 天）限制，
+    // 且只会去取「内置数据与缓存都没有的年份」。
+    Timer {
+        interval: 3600000
+        running: Plasmoid.configuration.holidayUpdateMode === "auto"
+        repeat: true
+        triggeredOnStart: true
+
+        onTriggered: {
+            const now = new Date();
+            if (!HolidaysNet.shouldAutoCheck(root.holidayCache, now)) {
+                return;
+            }
+            HolidaysNet.runUpdate(root.holidayCache, now, Holidays.COVERED_YEARS, null, function (result) {
+                if (result.fetched.length > 0) {
+                    Plasmoid.configuration.holidayCache = HolidaysNet.serializeCache(result.cache);
+                    console.log("holidays: 自动更新成功，年份 " + result.fetched.join(", "));
+                } else {
+                    // 即便没取到也要记录检查时间，避免每小时重复尝试
+                    Plasmoid.configuration.holidayCache = HolidaysNet.serializeCache(result.cache);
+                    console.log("holidays: 自动检查完成，无新增（" + result.messages.join("；") + "）");
+                }
+            });
         }
     }
 
@@ -284,11 +316,17 @@ PlasmoidItem {
                             required property int index
 
                             readonly property var cellDate: root.cellDateAt(index)
-                            readonly property var holiday: cellDate
-                                ? Holidays.statusFor(cellDate.getFullYear(),
-                                                     cellDate.getMonth() + 1,
-                                                     cellDate.getDate())
-                                : null
+                            // 缓存优先（联网获取到的年份），未命中回落到内置数据表
+                            readonly property var holiday: {
+                                if (!cellDate) {
+                                    return null;
+                                }
+                                const y = cellDate.getFullYear();
+                                const m = cellDate.getMonth() + 1;
+                                const d = cellDate.getDate();
+                                return HolidaysNet.statusFromCache(y, m, d, root.holidayCache)
+                                    || Holidays.statusFor(y, m, d);
+                            }
 
                             // 覆盖整个格子（而不只是小标记），这样悬停整格都能看提示。
                             // 未命中节假日的格子不可见 → 不拦截任何鼠标事件。

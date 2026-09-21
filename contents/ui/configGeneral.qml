@@ -1,12 +1,13 @@
 /*
- * 学期周数配置页
+ * 配置页
  *
- * 两个配置项：
- *   · showTermWeeks —— 是否在月历左侧显示自定义周数列
- *   · termStart     —— 第 1 周的起始日（ISO yyyy-MM-dd）
+ * 五项：法定节假日标记开关、数据更新方式与「立即更新」、学期周数开关与起始日。
  *
- * 起始日只需落在第 1 周内的任意一天即可——计算时会自动折到该周的首日，
- * 所以「开学日 9 月 1 日（周二）」和「8 月 31 日（周一）」结果相同。
+ * 学期周数的起始日只需落在第 1 周内的任意一天即可——计算时会自动折到该周的
+ * 首日，所以「开学日 9 月 1 日（周二）」和「8 月 31 日（周一）」结果相同。
+ *
+ * 联网更新由本页的按钮主动触发（点击后立即拉取并校验），或在组件里设为自动
+ * 模式后由组件按节律检查。拉取到的数据只有当通过校验才会被采用。
  */
 
 import QtQuick
@@ -18,18 +19,56 @@ import org.kde.kirigami as Kirigami
 
 import "termweek.js" as TermWeek
 import "holidays.js" as Holidays
+import "holidays-update.js" as HolidaysNet
 
 KCMUtils.SimpleKCM {
     id: page
 
+    // KCM 框架的约定：配置页自己声明并发出此信号，宿主据此启用「应用」按钮。
+    // SimpleKCM / AbstractKCM 本身并未定义它（已核对上游源码）。
+    signal configurationChanged()
+
     property alias cfg_showTermWeeks: showSwitch.checked
     property alias cfg_termStart: termStartField.text
     property alias cfg_showHolidays: showHolidaysSwitch.checked
+    property alias cfg_holidayUpdateMode: modeHolder.text
+    property alias cfg_holidayCache: cacheHolder.text
 
-    // 内置节假日数据的覆盖年份（次年安排发布后需更新 holidays.js）
-    readonly property string coveredYears: {
-        const v = Holidays.COVERED_YEARS;
-        return v.length > 0 ? v[0] + "–" + v[v.length - 1] : i18n("无");
+    property bool updating: false
+    property string updateStatus: ""
+
+    // 不展示，仅作为 cfg_ 的载体（SimpleKCM 通过 cfg_ 前缀属性读写配置）
+    QQC2.TextField { id: modeHolder; visible: false; width: 0; height: 0 }
+    QQC2.TextField { id: cacheHolder; visible: false; width: 0; height: 0 }
+
+    // 当前数据覆盖情况：内置年份 + 联网获取到的年份
+    readonly property string coverageText: {
+        const builtin = Holidays.COVERED_YEARS;
+        const cached = Object.keys(HolidaysNet.parseCache(cacheHolder.text).years).sort();
+        let t = i18n("内置数据：%1", builtin.length ? builtin[0] + "–" + builtin[builtin.length - 1] : i18n("无"));
+        t += cached.length ? i18n("；联网获取：%1", cached.join("、")) : i18n("；联网获取：无");
+        return t;
+    }
+
+    function startUpdate() {
+        page.updating = true;
+        page.updateStatus = i18n("正在检查…");
+        const cache = HolidaysNet.parseCache(cacheHolder.text);
+        HolidaysNet.runUpdate(cache, new Date(), Holidays.COVERED_YEARS,
+            function (msg) {
+                page.updateStatus = msg;
+            },
+            function (result) {
+                page.updating = false;
+                let txt = result.messages.join("\n");
+                if (result.fetched.length > 0) {
+                    cacheHolder.text = HolidaysNet.serializeCache(result.cache);
+                    page.configurationChanged();
+                    txt += "\n" + i18n("✓ 已获取 %1 年数据，请点「应用」保存后生效。",
+                                        result.fetched.join("、"));
+                }
+                page.updateStatus = txt;
+            });
     }
 
     readonly property var parsedStart: TermWeek.parseIsoDate(termStartField.text)
@@ -55,12 +94,58 @@ KCMUtils.SimpleKCM {
             onToggled: page.configurationChanged()
         }
 
+        QQC2.ComboBox {
+            id: modeCombo
+
+            Kirigami.FormData.label: i18n("数据更新方式：")
+            textRole: "text"
+            model: [
+                { text: i18n("手动（默认）"), value: "manual" },
+                { text: i18n("自动（每 30 天检查一次）"), value: "auto" }
+            ]
+            currentIndex: Math.max(0, model.findIndex(function (x) {
+                return x.value === modeHolder.text;
+            }))
+            onActivated: function (index) {
+                modeHolder.text = model[index].value;
+                page.configurationChanged();
+            }
+        }
+
+        RowLayout {
+            Kirigami.FormData.label: i18n("节假日数据：")
+
+            QQC2.Button {
+                id: updateButton
+                text: page.updating ? i18n("更新中…") : i18n("立即更新")
+                enabled: !page.updating
+                onClicked: page.startUpdate()
+            }
+
+            QQC2.BusyIndicator {
+                running: page.updating
+                visible: running
+                implicitWidth: Kirigami.Units.iconSizes.small
+                implicitHeight: Kirigami.Units.iconSizes.small
+            }
+        }
+
         QQC2.Label {
             Layout.maximumWidth: Kirigami.Units.gridUnit * 22
             wrapMode: Text.WordWrap
             opacity: 0.75
-            text: i18n("放假安排由国务院逐年发文规定（含调休补班），无法由历法推算，因此使用内置数据表。当前覆盖：%1 年。",
-                page.coveredYears)
+            text: page.coverageText + "\n"
+                + i18n("放假安排由国务院逐年发文规定（含调休），无法由历法推算，故使用数据表。")
+        }
+
+        QQC2.Label {
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 26
+            wrapMode: Text.WordWrap
+            visible: page.updateStatus !== ""
+            text: page.updateStatus
+            color: text.indexOf("✓") >= 0 ? Kirigami.Theme.positiveTextColor
+                 : (text.indexOf("✗") >= 0 || text.indexOf("HTTP") >= 0
+                    ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor)
         }
 
         QQC2.Switch {

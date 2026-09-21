@@ -18,5 +18,13 @@
     <entry name="showHolidays" type="Bool">
       <default>true</default>
     </entry>
+    <!-- 节假日数据更新方式：manual（手动，默认）| auto（自动，每 30 天检查一次） -->
+    <entry name="holidayUpdateMode" type="String">
+      <default>manual</default>
+    </entry>
+    <!-- 联网获取到的节假日数据缓存（JSON；只保存内置数据未覆盖的年份） -->
+    <entry name="holidayCache" type="String">
+      <default></default>
+    </entry>
   </group>
 </kcfg>
