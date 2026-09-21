@@ -65,6 +65,7 @@ PlasmoidItem {
         && termStartDate !== null
     readonly property bool holidaysVisible: Plasmoid.configuration.showHolidays
 
+
     // 联网获取到的节假日数据（只含内置数据未覆盖的年份）。配置里的 JSON 串
     // 解析失败时静默降级为空缓存，此时仅使用内置数据。
     readonly property var holidayCache: HolidaysNet.parseCache(Plasmoid.configuration.holidayCache)
@@ -162,16 +163,29 @@ PlasmoidItem {
         id: calendarComponent
 
         RowLayout {
+            id: calendarRow
+
             spacing: 0
+
+            // MonthView 有「日 / 月 / 年」三种视图（内部 swipeView.currentIndex 为 0/1/2，
+            // 对应 DayView / MonthView / YearView）。周数列与节假日标记都叠在「日视图」
+            // 网格上、用的是日视图的格子几何，因此非日视图时必须一并隐藏，
+            // 否则它们会固定在原位置不动。
+            //
+            // 注意：本属性必须定义在这个 Component 内部——monthView 只在此作用域可见，
+            // 定义在 PlasmoidItem 层级会得到 ReferenceError，而失败的绑定会让
+            // visible 停留在默认值 true，症状正是「切视图后标记不消失」。
+            readonly property bool dayView: monthView.currentIndex === 0
 
             // ── 自定义周数列 ──────────────────────────────────────────
             Item {
                 id: weekColumn
 
                 Layout.fillHeight: true
-                Layout.preferredWidth: root.termWeeksVisible
+                Layout.preferredWidth: root.termWeeksVisible && calendarRow.dayView
                     ? Math.max(24, Math.round(monthView.cellHeight * 0.62))
                     : 0
+                visible: root.termWeeksVisible && calendarRow.dayView
                 clip: true
 
                 // 从官方 daysModel 读每一行的起始日（索引 0,7,14,21,28,35）。
@@ -294,7 +308,7 @@ PlasmoidItem {
                     id: holidayLayer
 
                     anchors.fill: parent
-                    visible: root.holidaysVisible
+                    visible: root.holidaysVisible && calendarRow.dayView
 
                     // 按 DaysCalendar 的公式反推格子几何，勿硬编码像素：
                     //   cellWidth    = floor((width - (columns+1)*borderWidth) / columns)
