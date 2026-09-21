@@ -31,6 +31,11 @@ var URL_TEMPLATES = [
 // 一个月内取到，且不会产生可观的流量。
 var AUTO_CHECK_INTERVAL_DAYS = 30;
 
+// 单次更新最多联网获取几个年份。用于兜住「内置数据极旧、积欠多年」的情形：
+// 一次点更新只补最近的几个年份，其余留待下次点击（结果里会提示还剩几年）。
+// 正常情况下积欠不会超过 1–2 年，这个上限不会触发。
+var MAX_YEARS_PER_RUN = 5;
+
 // 节假日名称 → 放假天数合理区间。
 // 含「·」「、」的合并节日（如 2025 年的「国庆节、中秋节」连休 8 天）不适用
 // 单节日区间，因此只对精确匹配的名称做天数检查。
@@ -299,16 +304,28 @@ function coveredYears(cache, builtinYears) {
     return out;
 }
 
-// 需要联网获取的年份：当年与次年之中，尚未覆盖的
+// 需要联网获取的年份：从「最新已覆盖年份 + 1」一直排到「次年」，
+// 因此中途遗漏的年份都会被补回来。
+//
+// 早期版本写死为 [当年, 次年]，会漏掉「某年忘记更新」的情形：例如 2027 年
+// 没更新、2028 年 1 月才点，旧规则只取 2028/2029，2027 永远不会被补齐。
+//
+// 返回完整列表（不截断），由调用方按 MAX_YEARS_PER_RUN 分批。
 function yearsToFetch(cache, now, builtinYears) {
     var covered = coveredYears(cache, builtinYears);
-    var out = [];
-    var candidates = [now.getFullYear(), now.getFullYear() + 1];
-    for (var i = 0; i < candidates.length; i++) {
-        var y = candidates[i];
-        if (!covered.hasOwnProperty(String(y))) {
-            out.push(y);
+    var newest = 0;
+    for (var y in covered) {
+        var n = Number(y);
+        if (n > newest) {
+            newest = n;
         }
+    }
+    // 完全没有已知数据时（内置表为空、缓存也为空）兜底取最近两年，
+    // 避免从 1 年一路排到今年。
+    var start = newest > 0 ? newest + 1 : Math.max(1, now.getFullYear() - 1);
+    var out = [];
+    for (var year = start; year <= now.getFullYear() + 1; year++) {
+        out.push(year);
     }
     return out;
 }
@@ -377,8 +394,11 @@ function fetchJson(url, onDone) {
 // 任一源返回的、通过校验的数据才会被采用；未通过的会记录原因并尝试下一个源。
 function runUpdate(cache, now, builtinYears, onProgress, onDone) {
     var progress = onProgress || function () {};
-    var result = { cache: cache, fetched: [], failed: [], notPublished: [], messages: [] };
-    var years = yearsToFetch(cache, now, builtinYears);
+    var result = { cache: cache, fetched: [], failed: [], notPublished: [],
+                   remaining: 0, messages: [] };
+    var all = yearsToFetch(cache, now, builtinYears);
+    var years = all.slice(0, MAX_YEARS_PER_RUN);
+    result.remaining = all.length - years.length;
 
     if (!years.length) {
         result.messages.push("已是最新：内置数据与缓存已覆盖 " + now.getFullYear()
@@ -391,6 +411,10 @@ function runUpdate(cache, now, builtinYears, onProgress, onDone) {
 
     function nextYear() {
         if (yi >= years.length) {
+            if (result.remaining > 0) {
+                result.messages.push("还有 " + result.remaining
+                    + " 个年份的数据待获取，请再点一次「立即更新」继续。");
+            }
             result.cache = { years: result.cache.years, checkedAt: now.toISOString() };
             onDone(result);
             return;
@@ -420,6 +444,11 @@ function runUpdate(cache, now, builtinYears, onProgress, onDone) {
             progress("正在获取 " + year + " 年数据…（源 " + (ui + 1) + "/" + urls.length + "）");
             fetchJson(url, function (status, payload) {
                 if (status !== 200) {
+                    // 404 表示该年份的文件还不存在 —— 与「只有占位文件」同义，
+                    // 都是「尚未发布」这一预期内的状态，不该标成失败。
+                    if (status === 404) {
+                        sawNotPublished = true;
+                    }
                     reasons.push("HTTP " + status + "（" + hostOf(url) + "）");
                     ui += 1;
                     tryUrl();
