@@ -105,8 +105,17 @@ KCMUtils.SimpleKCM {
             id: showHolidaysSwitch
 
             Kirigami.FormData.label: i18n("法定节假日：")
-            text: i18n("在日期上标记「休 / 班」")
+            text: i18n("标记「休 / 班」")
             onToggled: page.configurationChanged()
+        }
+
+        QQC2.Label {
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 22
+            wrapMode: Text.WordWrap
+            opacity: 0.6
+            font.pointSize: Math.max(6, Kirigami.Theme.smallFont.pointSize)
+            text: i18n("对所有显示样式生效（格子上的标记、徽章、本周条里的「休」）。\n"
+                       + "「假期倒计时」样式整块就是假期内容，不受这个开关影响。")
         }
 
         QQC2.ComboBox {
@@ -167,8 +176,16 @@ KCMUtils.SimpleKCM {
             id: showSwitch
 
             Kirigami.FormData.label: i18n("学期周数：")
-            text: i18n("在月历左侧显示周数")
+            text: i18n("显示学期周数")
             onToggled: page.configurationChanged()
+        }
+
+        QQC2.Label {
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 22
+            wrapMode: Text.WordWrap
+            opacity: 0.6
+            font.pointSize: Math.max(6, Kirigami.Theme.smallFont.pointSize)
+            text: i18n("整月网格左侧的一列周数；其它样式里的「第 N 周」也跟着显示或隐藏。")
         }
 
         QQC2.TextField {

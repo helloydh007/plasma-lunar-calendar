@@ -25,6 +25,7 @@ Item {
     property string dayText: ""
     property string lunarText: ""
     property var holiday: null
+    property bool holidaysVisible: true
 
     readonly property color faintText: Qt.rgba(Kirigami.Theme.textColor.r,
                                                Kirigami.Theme.textColor.g,
@@ -66,7 +67,7 @@ Item {
         Rectangle {
             id: badge
 
-            visible: view.holiday !== null
+            visible: view.holidaysVisible && view.holiday !== null
             width: visible ? badgeText.implicitWidth + Kirigami.Units.smallSpacing * 1.5 : 0
             height: Math.max(12, Math.round(view.smallFont * 1.5))
             radius: 3

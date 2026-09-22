@@ -37,6 +37,7 @@ Item {
     property int todayColumn: -1        // 今天在 weekCells 里的下标，-1 = 未知
     property var weekHolidays: []       // 与 weekCells 等长；null | { type, name }
     property var holiday: null          // 今天的假期状态
+    property bool holidaysVisible: true // 「法定节假日」开关：管所有 休/班 标记
     property string termWeekLabel: ""   // 「第 3 周」，无则空串
     property real cardOpacity: 1
 
@@ -115,7 +116,7 @@ Item {
             anchors.top: parent.top
             anchors.right: parent.right
             anchors.margins: view.pad
-            visible: view.holiday !== null
+            visible: view.holidaysVisible && view.holiday !== null
             width: visible ? Math.max(18, Math.round(mainCard.height * 0.11)) : 0
             height: width
             radius: Kirigami.Units.cornerRadius
@@ -270,7 +271,9 @@ Item {
 
                 readonly property var cell: modelData
                 readonly property bool isToday: index === view.todayColumn
-                readonly property var hol: view.weekHolidays[index] || null
+                // 开关关掉时当作没有节假日：第三行回落成农历
+                readonly property var hol: view.holidaysVisible
+                    ? (view.weekHolidays[index] || null) : null
                 readonly property date cellDate: cell
                     ? new Date(cell.year, cell.month - 1, cell.day) : null
                 // 窄而高的格子里，字号跟着宽度走更稳

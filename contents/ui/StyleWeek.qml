@@ -23,6 +23,7 @@ Item {
     property var weekCells: []
     property int todayColumn: -1
     property var weekHolidays: []
+    property bool holidaysVisible: true
     property string termWeekLabel: ""
     property string monthText: ""       // 「九月」
     property real cardOpacity: 1
@@ -118,7 +119,8 @@ Item {
 
                 readonly property var cell: modelData
                 readonly property bool isToday: index === view.todayColumn
-                readonly property var hol: view.weekHolidays[index] || null
+                readonly property var hol: view.holidaysVisible
+                    ? (view.weekHolidays[index] || null) : null
                 readonly property date cellDate: cell
                     ? new Date(cell.year, cell.month - 1, cell.day) : null
                 // 窄而高的格子里，字号跟着宽度走更稳

@@ -13,7 +13,7 @@
         "Id": "io.github.helloydh007.lunarcalendar",
         "License": "GPL-2.0+",
         "Name": "农历月历 (Lunar Calendar)",
-        "Version": "1.5.0",
+        "Version": "1.5.1",
         "Website": "https://github.com/helloydh007/plasma-lunar-calendar"
     },
     "X-Plasma-API-Minimum-Version": "6.0"

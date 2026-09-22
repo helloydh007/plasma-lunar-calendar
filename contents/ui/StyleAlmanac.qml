@@ -29,6 +29,7 @@ Item {
     property string lunarText: ""       // 「八月十二」
     property var ganzhi: null           // { name: "丙午", zodiac: "马" }
     property var holiday: null          // { type, name }
+    property bool holidaysVisible: true
     property string termWeekLabel: ""   // 「第 3 周」
     property var nextTerm: null         // { name, date, daysAway }
     property var nextFestival: null     // { name, date, daysAway, isLunar }
@@ -144,7 +145,7 @@ Item {
             anchors.top: parent.top
             anchors.right: parent.right
             anchors.margins: view.pad
-            visible: view.holiday !== null
+            visible: view.holidaysVisible && view.holiday !== null
             width: visible ? badgeText.implicitWidth + Kirigami.Units.smallSpacing * 1.5 : 0
             height: Math.max(16, Math.round(heroCard.height * 0.12))
             radius: Kirigami.Units.cornerRadius

@@ -27,6 +27,7 @@ Item {
     property var cellHolidays: []       // 与 cells 等长
     property int todayIndex: -1
     property var todayHoliday: null
+    property bool holidaysVisible: true
     property string termWeekLabel: ""
     property real cardOpacity: 1
 
@@ -61,6 +62,8 @@ Item {
         .dayName(view.todayDate.getDay(), Locale.LongFormat)
     readonly property var todayCellData: view.todayIndex >= 0
         ? view.cells[view.todayIndex] : null
+    // 开关关掉时当作今天没有节假日：徽章和详情里那句「放假」一起消失
+    readonly property var shownHoliday: view.holidaysVisible ? view.todayHoliday : null
 
     // ── 几何 ──
     readonly property real margin: Kirigami.Units.largeSpacing
@@ -169,7 +172,8 @@ Item {
                     readonly property bool isToday: index === view.todayIndex
                     readonly property bool inMonth: cell
                         && cell.year === view.currentYear && cell.month === view.currentMonth
-                    readonly property var hol: view.cellHolidays[index] || null
+                    readonly property var hol: view.holidaysVisible
+                        ? (view.cellHolidays[index] || null) : null
 
                     width: miniPanel.cellSize
                     height: miniPanel.cellSize
@@ -304,19 +308,19 @@ Item {
             Rectangle {
                 id: badge
 
-                visible: view.todayHoliday !== null
+                visible: view.shownHoliday !== null
                 width: visible ? Math.max(16, Math.round(detailDateRow.height * 0.42)) : 0
                 height: width
                 y: 0
                 radius: 3
-                color: view.todayHoliday && view.todayHoliday.type === "off"
+                color: view.shownHoliday && view.shownHoliday.type === "off"
                     ? "#c0392b" : "#6b7280"
 
                 PlasmaComponents.Label {
                     anchors.centerIn: parent
                     color: "white"
                     font.pixelSize: Math.max(8, Math.round(parent.height * 0.66))
-                    text: view.todayHoliday && view.todayHoliday.type === "off"
+                    text: view.shownHoliday && view.shownHoliday.type === "off"
                         ? i18n("休") : i18n("班")
                 }
             }
@@ -356,10 +360,10 @@ Item {
             font.pixelSize: Math.max(8, Kirigami.Theme.smallFont.pixelSize)
             text: {
                 const parts = [];
-                if (view.todayHoliday) {
-                    parts.push(view.todayHoliday.type === "off"
-                        ? i18n("%1：放假", view.todayHoliday.name)
-                        : i18n("%1：调休上班", view.todayHoliday.name));
+                if (view.shownHoliday) {
+                    parts.push(view.shownHoliday.type === "off"
+                        ? i18n("%1：放假", view.shownHoliday.name)
+                        : i18n("%1：调休上班", view.shownHoliday.name));
                 }
                 if (view.termWeekLabel !== "") {
                     parts.push(view.termWeekLabel);

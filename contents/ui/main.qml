@@ -228,11 +228,12 @@ PlasmoidItem {
     readonly property string monthTitle: Qt.locale()
         .standaloneMonthName(root.today.getMonth(), Locale.LongFormat)
 
-    // 学期周次（未设置起始日、或今天早于第 1 周时不显示）
+    // 学期周次文案。跟着「学期周数」开关走：关掉后各样式里的「第 N 周」
+    // 一并消失（月历左侧那一列由 StyleMonth 自己判 termWeeksVisible）。
     readonly property int todayTermWeek: root.termStartDate
         ? TermWeek.termWeekOf(root.today, root.termStartDate, Qt.locale().firstDayOfWeek)
         : 0
-    readonly property string termWeekLabel: root.todayTermWeek >= 1
+    readonly property string termWeekLabel: root.termWeeksVisible && root.todayTermWeek >= 1
         ? i18n("第 %1 周", root.todayTermWeek) : ""
 
     // 节假日：缓存优先（联网获取到的年份），未命中回落到内置数据表
@@ -494,6 +495,7 @@ PlasmoidItem {
         lunarText: root.todayCell && root.todayCell.isTerm
             ? root.todayCell.lunar : root.todayLunarText
         holiday: root.todayHoliday
+        holidaysVisible: root.holidaysVisible
 
         onActivated: root.expanded = !root.expanded
     }
@@ -511,7 +513,7 @@ PlasmoidItem {
         if (root.termWeekLabel !== "") {
             parts.push(root.termWeekLabel);
         }
-        if (root.todayHoliday) {
+        if (root.holidaysVisible && root.todayHoliday) {
             parts.push(root.todayHoliday.type === "off"
                 ? i18n("%1：放假", root.todayHoliday.name)
                 : i18n("%1：调休上班", root.todayHoliday.name));
@@ -560,6 +562,7 @@ PlasmoidItem {
             todayColumn: root.todayColumn
             weekHolidays: root.weekHolidays
             holiday: root.todayHoliday
+            holidaysVisible: root.holidaysVisible
             termWeekLabel: root.termWeekLabel
             cardOpacity: root.cardOpacity
         }
@@ -572,6 +575,7 @@ PlasmoidItem {
             weekCells: root.weekCells
             todayColumn: root.todayColumn
             weekHolidays: root.weekHolidays
+            holidaysVisible: root.holidaysVisible
             termWeekLabel: root.termWeekLabel
             monthText: root.monthTitle
             cardOpacity: root.cardOpacity
@@ -586,6 +590,7 @@ PlasmoidItem {
             cellHolidays: root.monthCellHolidays
             todayIndex: root.todayIndex
             todayHoliday: root.todayHoliday
+            holidaysVisible: root.holidaysVisible
             termWeekLabel: root.termWeekLabel
             cardOpacity: root.cardOpacity
         }
@@ -603,6 +608,7 @@ PlasmoidItem {
             nextTerm: root.nextTerm
             nextFestival: root.nextFestival
             monthTerms: root.monthTerms
+            holidaysVisible: root.holidaysVisible
             cardOpacity: root.cardOpacity
         }
     }
