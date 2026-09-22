@@ -93,10 +93,15 @@ PlasmoidItem {
 
     // 背景 / 卡片不透明度（0..1）。
     // 不能用 `Number(x) || 100`：0 是合法取值，会被 || 吞掉。
+    // 另外要显式挡掉空值 —— `Number("")` 是 0 而不是 NaN，配置被手改坏或
+    // 键不存在时会得到「全透明」，看起来就像组件坏了。
     function opacityFrom(value) {
-        let v = Number(value);
+        if (value === undefined || value === null || value === "") {
+            return 1;
+        }
+        const v = Number(value);
         if (!isFinite(v)) {
-            v = 100;
+            return 1;
         }
         return Math.max(0, Math.min(100, Math.round(v))) / 100;
     }
