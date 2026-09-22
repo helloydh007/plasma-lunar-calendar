@@ -85,7 +85,8 @@ PlasmoidItem {
     // 显示样式。认不出来的值一律当整月网格，免得配置被手改坏之后什么都不显示。
     readonly property string viewStyle: {
         const v = Plasmoid.configuration.viewStyle;
-        if (v === "today" || v === "week" || v === "mini" || v === "upcoming") {
+        if (v === "today" || v === "week" || v === "mini" || v === "upcoming"
+                || v === "almanac") {
             return v;
         }
         return "month";
@@ -134,13 +135,18 @@ PlasmoidItem {
     // ══════════════════ 农历数据源 ══════════════════
 
     /*
-     * 42 个日期格子的数据，索引 0 是当前月网格的第一格（行首＝周首日）。
+     * 日期窗口。索引 0 是当前月网格的第一格（行首＝周首日）。
+     * 前 42 格就是月历网格那 6 行；多出来的部分是给「农历详情」样式往后
+     * 找节气/农历节日用的，所以窗口开成 12 周（84 天）。
      * 每格：{ year, month, day, dayText, lunar, full, isTerm }
      *   dayText 公历日号（「22」）
      *   lunar   农历短标签（「十二」，初一那天是月名「八月」，节气当天是节气名「白露」）
      *   full    农历完整写法（「丙午八月十二」，节气当天带括号「丙午七月廿六 (白露)」）
      */
     property var cells: []
+
+    // 月历网格 / 迷你月历只该画 6 行，取前 42 格
+    readonly property var monthCells: root.cells.slice(0, 42)
 
     function publishCell(index, cell) {
         const arr = root.cells.slice();
@@ -152,10 +158,10 @@ PlasmoidItem {
         id: lunarBackend
 
         days: 7
-        weeks: 6
+        weeks: 12
         firstDayOfWeek: Qt.locale().firstDayOfWeek
         today: root.today
-        // displayedDate 决定这 42 天从哪天起算。绑到 today 上，
+        // displayedDate 决定这 84 天从哪天起算。绑到 today 上，
         // 跨月时范围自动跟着走，不用重建后端。
         displayedDate: root.today
 
@@ -213,6 +219,8 @@ PlasmoidItem {
     // ══════════════════ 派生数据 ══════════════════
 
     readonly property int todayIndex: ViewData.indexOfToday(root.cells, root.today)
+    // 今天那一格（农历数据未就绪时 full/lunar 是空串，公历字段始终有）
+    readonly property var todayCell: root.todayIndex >= 0 ? root.cells[root.todayIndex] : null
     // 今天在本周那一行里的下标（0 = 周首日）
     readonly property int todayColumn: root.todayIndex >= 0 ? root.todayIndex % 7 : -1
     readonly property var weekCells: ViewData.weekRowOf(root.cells, root.todayIndex)
@@ -250,6 +258,9 @@ PlasmoidItem {
         return out;
     }
 
+    // 前 42 格（月历网格用）的假期状态，与 monthCells 一一对应
+    readonly property var monthCellHolidays: root.cellHolidays.slice(0, 42)
+
     readonly property var weekHolidays: {
         const out = [];
         for (let i = 0; i < root.weekCells.length; ++i) {
@@ -259,6 +270,40 @@ PlasmoidItem {
     }
 
     readonly property var todayHoliday: root.holidayOfDate(root.today)
+
+    // ══════════════════ 农历详情样式要用的 ══════════════════
+
+    readonly property string todayFullLunar: {
+        const c = root.todayIndex >= 0 ? root.cells[root.todayIndex] : null;
+        return c ? c.full : "";
+    }
+    // 「八月十二」
+    readonly property string todayLunarText: ViewData.lunarDateText(root.todayFullLunar)
+    // { name: "丙午", zodiac: "马" }
+    readonly property var todayGanzhi: ViewData.ganzhiOf(root.todayFullLunar)
+    // 窗口内（最长 84 天）能看见的下一个节气
+    readonly property var nextTerm: ViewData.nextSolarTerm(root.cells, root.today)
+    // 下一个「与农历有关的日子」：优先窗口内的农历节日，看不到就退到法定假期
+    readonly property var nextFestival: {
+        const lunar = ViewData.nextLunarFestival(root.cells, root.today,
+                                                 ViewData.LUNAR_FESTIVALS);
+        const statutory = root.upcoming.length > 0 ? root.upcoming[0] : null;
+        if (lunar && (!statutory || lunar.daysAway <= statutory.daysAway)) {
+            return { name: lunar.name, date: lunar.date, daysAway: lunar.daysAway,
+                     isLunar: true };
+        }
+        if (statutory) {
+            return { name: statutory.name, date: statutory.date,
+                     daysAway: statutory.daysAway, isLunar: false };
+        }
+        return lunar
+            ? { name: lunar.name, date: lunar.date, daysAway: lunar.daysAway, isLunar: true }
+            : null;
+    }
+    // 本月的节气，例如「白露 9/7 · 秋分 9/23」
+    readonly property var monthTerms: ViewData.termsInMonth(root.cells,
+                                                            root.today.getFullYear(),
+                                                            root.today.getMonth() + 1)
 
     // 接下来几个法定节假日（连续的同名放假日算一段）。最远找 400 天。
     readonly property var upcoming: ViewData.upcomingOffDays(root.today, 400, 6,
@@ -293,6 +338,8 @@ PlasmoidItem {
             return 300;
         case "upcoming":
             return 320;
+        case "almanac":
+            return 330;
         }
         return 410;
     }
@@ -397,6 +444,39 @@ PlasmoidItem {
         }
     }
 
+    // 面板上的紧凑视图。桌面容器不用它，所以放桌面上完全不受影响；
+    // 放在面板里时 Plasma 按「形态」自动选紧凑视图，点一下弹出完整视图。
+    compactRepresentation: CompactRepresentation {
+        dayText: root.todayCell ? String(root.todayCell.day) : ""
+        // 节气当天优先显示节气名（那天农历日名信息量不如「秋分」）
+        lunarText: root.todayCell && root.todayCell.isTerm
+            ? root.todayCell.lunar : root.todayLunarText
+        holiday: root.todayHoliday
+
+        onActivated: root.expanded = !root.expanded
+    }
+
+    // 悬停在面板项上时的提示。
+    // 注意是 PlasmoidItem 自己的属性，不写 Plasmoid. 前缀 ——
+    // 附加对象上那两个同名的只是只读转发，赋值会报 non-existent property。
+    toolTipMainText: Qt.formatDate(root.today, "yyyy年M月d日")
+        + " " + Qt.locale().dayName(root.today.getDay(), Locale.LongFormat)
+    toolTipSubText: {
+        const parts = [];
+        if (root.todayFullLunar !== "") {
+            parts.push(root.todayFullLunar);
+        }
+        if (root.termWeekLabel !== "") {
+            parts.push(root.termWeekLabel);
+        }
+        if (root.todayHoliday) {
+            parts.push(root.todayHoliday.type === "off"
+                ? i18n("%1：放假", root.todayHoliday.name)
+                : i18n("%1：调休上班", root.todayHoliday.name));
+        }
+        return parts.join(" · ");
+    }
+
     readonly property Component styleComponent: {
         switch (root.viewStyle) {
         case "today":
@@ -407,6 +487,8 @@ PlasmoidItem {
             return styleMiniComponent;
         case "upcoming":
             return styleUpcomingComponent;
+        case "almanac":
+            return styleAlmanacComponent;
         }
         return styleMonthComponent;
     }
@@ -415,8 +497,8 @@ PlasmoidItem {
         id: styleMonthComponent
 
         StyleMonth {
-            cells: root.cells
-            cellHolidays: root.cellHolidays
+            cells: root.monthCells
+            cellHolidays: root.monthCellHolidays
             termWeeksVisible: root.termWeeksVisible
             termStartDate: root.termStartDate
             holidaysVisible: root.holidaysVisible
@@ -456,11 +538,27 @@ PlasmoidItem {
         id: styleMiniComponent
 
         StyleMini {
-            cells: root.cells
-            cellHolidays: root.cellHolidays
+            cells: root.monthCells
+            cellHolidays: root.monthCellHolidays
             todayIndex: root.todayIndex
             todayHoliday: root.todayHoliday
             termWeekLabel: root.termWeekLabel
+            cardOpacity: root.cardOpacity
+        }
+    }
+
+    Component {
+        id: styleAlmanacComponent
+
+        StyleAlmanac {
+            todayCell: root.todayIndex >= 0 ? root.cells[root.todayIndex] : null
+            lunarText: root.todayLunarText
+            ganzhi: root.todayGanzhi
+            holiday: root.todayHoliday
+            termWeekLabel: root.termWeekLabel
+            nextTerm: root.nextTerm
+            nextFestival: root.nextFestival
+            monthTerms: root.monthTerms
             cardOpacity: root.cardOpacity
         }
     }

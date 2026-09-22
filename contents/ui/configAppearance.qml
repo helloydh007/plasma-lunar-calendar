@@ -41,7 +41,10 @@ KCMUtils.SimpleKCM {
                      + "右边是今天的农历与节气。面积约为整月网格的一半。") },
         { value: "upcoming", name: i18n("假期倒计时"),
           hint: i18n("接下来几个法定节假日排成一列，带「3 天后」这样的倒计时。"
-                     + "回答「最近的假是哪天」。调休上班日不算假期。") }
+                     + "回答「最近的假是哪天」。调休上班日不算假期。") },
+        { value: "almanac", name: i18n("农历详情"),
+          hint: i18n("把今天讲透：干支纪年与生肖（丙午年 · 马）、农历月日、"
+                     + "下个节气还有几天、下一个农历节日、本月有哪两个节气。") }
     ]
 
     readonly property int styleIndex: {
@@ -72,6 +75,16 @@ KCMUtils.SimpleKCM {
             wrapMode: Text.WordWrap
             opacity: 0.75
             text: page.styles[page.styleIndex] ? page.styles[page.styleIndex].hint : ""
+        }
+
+        QQC2.Label {
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 34
+            wrapMode: Text.WordWrap
+            opacity: 0.6
+            font.pointSize: Math.max(6, Kirigami.Theme.smallFont.pointSize)
+            text: i18n("放桌面上用完整样式；拖到面板（任务栏）里时自动换成一行紧凑视图"
+                       + "（「22 八月十二」），不受这里影响 —— 面板上位置太窄，"
+                       + "点击展开完整视图。")
         }
 
         Kirigami.Separator {

@@ -83,3 +83,104 @@ function upcomingOffDays(today, maxDays, count, statusFn) {
     }
     return out;
 }
+
+// ── 「农历详情」样式要用的几样 ──
+
+// 农历节日。key 是 alternatecalendar 完整写法里的「月+日」片段，
+// 例如八月十五那天 subLabel = 「丙午八月十五」，用 indexOf 就能认出来。
+// 注意写法：农历日用「初一…初十、十一…十九、二十、廿一…廿九、三十」这套。
+var LUNAR_FESTIVALS = [
+    { key: "正月初一", name: "春节" },
+    { key: "正月十五", name: "元宵节" },
+    { key: "二月初二", name: "龙抬头" },
+    { key: "五月初五", name: "端午节" },
+    { key: "七月初七", name: "七夕" },
+    { key: "八月十五", name: "中秋节" },
+    { key: "九月初九", name: "重阳节" },
+    { key: "腊月初八", name: "腊八" },
+    { key: "腊月廿三", name: "小年" }
+];
+
+// 从「丙午八月十二」里取出农历月日（去掉开头的干支两字与后面的节气括号）
+function lunarDateText(full) {
+    if (!full || full.length <= 2) {
+        return "";
+    }
+    var t = full.substring(2);
+    var p = t.indexOf("(");
+    if (p < 0) {
+        p = t.indexOf("（");
+    }
+    if (p >= 0) {
+        t = t.substring(0, p);
+    }
+    return t.trim();
+}
+
+// 干支纪年 + 生肖。alternatecalendar 的完整写法以「丙午」这样的干支开头，
+// 取前两字并校验确实是「天干 + 地支」，避免格式变了之后显示垃圾。
+function ganzhiOf(full) {
+    var STEMS = "甲乙丙丁戊己庚辛壬癸";
+    var BRANCHES = "子丑寅卯辰巳午未申酉戌亥";
+    var ZODIAC = ["鼠", "牛", "虎", "兔", "龙", "蛇", "马", "羊", "猴", "鸡", "狗", "猪"];
+    if (!full || full.length < 2) {
+        return null;
+    }
+    var a = full.charAt(0);
+    var b = full.charAt(1);
+    var si = STEMS.indexOf(a);
+    var bi = BRANCHES.indexOf(b);
+    if (si < 0 || bi < 0) {
+        return null;
+    }
+    return { name: a + b, zodiac: ZODIAC[bi] };
+}
+
+// 窗口内今天（含）之后的第一个节气。节气那天 subDayLabel 就是节气名。
+function nextSolarTerm(cells, today) {
+    for (var i = 0; i < cells.length; ++i) {
+        var c = cells[i];
+        if (!c || !c.isTerm || !c.lunar) {
+            continue;
+        }
+        var d = new Date(c.year, c.month - 1, c.day);
+        var away = daysBetween(today, d);
+        if (away >= 0) {
+            return { name: c.lunar, date: d, daysAway: away };
+        }
+    }
+    return null;
+}
+
+// 窗口内今天（含）之后的第一个农历节日。cells 是按日期递增的，所以第一个
+// 命中的就是最近的。
+function nextLunarFestival(cells, today, festivals) {
+    for (var i = 0; i < cells.length; ++i) {
+        var c = cells[i];
+        if (!c || !c.full) {
+            continue;
+        }
+        for (var j = 0; j < festivals.length; ++j) {
+            if (c.full.indexOf(festivals[j].key) >= 0) {
+                var d = new Date(c.year, c.month - 1, c.day);
+                var away = daysBetween(today, d);
+                if (away >= 0) {
+                    return { name: festivals[j].name, date: d, daysAway: away };
+                }
+            }
+        }
+    }
+    return null;
+}
+
+// 某个月份里有哪些节气（用于「本月节气」那一行）
+function termsInMonth(cells, year, month) {
+    var out = [];
+    for (var i = 0; i < cells.length; ++i) {
+        var c = cells[i];
+        if (c && c.isTerm && c.lunar && c.year === year && c.month === month) {
+            out.push({ name: c.lunar, date: new Date(c.year, c.month - 1, c.day) });
+        }
+    }
+    return out;
+}

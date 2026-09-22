@@ -1,24 +1,25 @@
 # 农历月历 · Lunar Calendar (KDE Plasma 6)
 
 一个常驻桌面的月历小组件，通过 KDE 官方的 `alternatecalendar` 日历引擎显示中国农历，
-有**五种显示样式**可切换，并可选显示**自定义「学期周数」**（以开学日为第 1 周）。
+有**六种显示样式**可切换，可放桌面也可放面板，并可选显示**自定义「学期周数」**（以开学日为第 1 周）。
 
 <img src="screenshot.png" width="420" alt="农历月历截图">
 
 > **English:** A desktop calendar plasmoid for KDE Plasma 6 that displays the Chinese lunar
-> calendar (农历). Five interchangeable display styles (full month grid / today card / week
-> strip / mini month + today / holiday countdown), an optional custom term/semester
-> week-number column, statutory-holiday markers (休 / 班), and adjustable background and card
-> opacity. It reuses KDE's own `alternatecalendar` calendar plugin engine — the same engine
-> behind the Digital Clock's calendar popup — so the lunar data is not reimplemented here,
-> and it shares the calendar-system setting with the system tray clock.
+> calendar (农历). Six interchangeable display styles (full month grid / today card / week
+> strip / mini month + today / holiday countdown / lunar almanac), a one-line compact view
+> for panels, an optional custom term/semester week-number column, statutory-holiday markers
+> (休 / 班), and adjustable background and card opacity. It reuses KDE's own
+> `alternatecalendar` calendar plugin engine — the same engine behind the Digital Clock's
+> calendar popup — so the lunar data is not reimplemented here, and it shares the
+> calendar-system setting with the system tray clock.
 
 ## 特性
 
 - 常驻桌面的月历，每个日期下方显示农历（初一、十五……）与节气（白露、秋分、寒露……）
 - 农历数据来自 KDE 官方引擎（`plasma-calendar-addons` 提供的 `alternatecalendar` 插件），
   与系统托盘时钟共享同一份配置 —— **不是自己算的**
-- **五种显示样式**，设置里切换，尺寸都自适应（详见下节）：
+- **六种显示样式**，设置里切换，尺寸都自适应（详见下节）：
   | 样式 | 看什么 |
   | --- | --- |
   | 整月网格（默认） | 一眼看全一个月 |
@@ -26,6 +27,8 @@
   | 本周 | 只画本周七天，占地最小 |
   | 迷你月历 + 今日 | 小月历 + 今天详情，约半格面积 |
   | 假期倒计时 | 接下来的法定节假日与「几天后」 |
+  | 农历详情 | 干支纪年与生肖、下个节气/农历节日还有几天 |
+- **也能放任务栏**：拖到面板里自动变成一行紧凑视图（`22 八月十二`），点一下展开完整视图
 - **背景与卡片不透明度可调**（0–100%），可以把底板调透、只留内容浮在桌面上
 - **可选的自定义学期周数列**：以指定的开学日为第 1 周，按周递增（详见下节）
 - **可选的法定节假日标记**：在日期上标出 `休`（放假）与 `班`（调休上班），
@@ -68,13 +71,13 @@ kpackagetool6 --type Plasma/Applet --install .
 kpackagetool6 --type Plasma/Applet --remove io.github.helloydh007.lunarcalendar
 ```
 
-## 显示样式（五种）
+## 显示样式（六种）
 
 在组件上点右键 → 「配置农历月历…」→ **外观** → 「显示样式」，随时切换。
 
-<img src="screenshot-styles.png" width="900" alt="五种显示样式">
+<img src="screenshot-styles.png" width="900" alt="六种显示样式">
 
-左上起：整月网格 · 今日 · 本周 ／ 迷你月历 + 今日 · 假期倒计时
+左上起：整月网格 · 今日 · 本周 ／ 迷你月历 + 今日 · 假期倒计时 · 农历详情
 （都是 416 × 417 逻辑像素下的实际渲染；图中是浅色主题，实际跟随你的颜色方案）
 
 | 值 | 名字 | 画什么 | 适合 |
@@ -84,16 +87,37 @@ kpackagetool6 --type Plasma/Applet --remove io.github.helloydh007.lunarcalendar
 | `week` | 本周 | 一行标题（`九月 · 第 3 周`）+ 本周七天，每格星期/日号/农历 | 占地最小，适合很扁的尺寸 |
 | `mini` | 迷你月历 + 今日 | 左边小月历（只有日号，今天高亮，节假日一个色点）+ 右边今天详情 | 面积约为整月网格的一半 |
 | `upcoming` | 假期倒计时 | 接下来的法定节假日列表：节日名 / 日期 / `3 天后`，还有今天的摘要 | 回答「最近的假是哪天」 |
+| `almanac` | 农历详情 | 干支纪年与生肖（`丙午年 · 马`）+ 农历月日作主角 + 下个节气还有几天 + 下一个农历节日 + 本月两个节气 | 回答「今天是什么农历日子」 |
+
+「农历详情」里的农历节日是从农历日期认出来的（`八月十五` → 中秋节），所以它能认出**非法定**
+的节日（七夕、重阳、腊八、小年、龙抬头）。往后找的范围是**当前月 + 之后 84 天**；窗口里
+没有节日时，那一行会自动退成「下个假期」（法定节假日），不会留个空位让人以为坏了。
 
 设计上的几条硬规矩：
 
 - **今天永远一眼可辨** —— 每种样式里今天都是实心高亮，且不受「卡片不透明度」影响
 - **`休` / `班` 徽章不受透明度影响** —— 那是信息，跟着淡就会糊在壁纸上读不清
 - 文字放不下就省略，不叠印；列表放不下就少显示几行，并在下面说明还有几个没显示
-- 五种样式共用同一份日期数据（见「实现要点」第 7 条），所以换样式不会改变农历的准确性
+- 高度不够时按「先舍弃次要信息」的顺序让步（例如农历详情会先去「本月节气」、再去倒计时块）
+- 六种样式共用同一份日期数据（见「实现要点」第 7 条），所以换样式不会改变农历的准确性
 
 「假期倒计时」不看「法定节假日」那个开关（它整块就是这个内容）；`休`/`班` 标记开关只影响
-另外四种样式里的标记。
+另外五种样式里的标记。
+
+## 放在面板（任务栏）里
+
+把组件拖到任务栏，它会自动换成一行紧凑视图：
+
+```
+┌──────────────┐
+│ 22  八月十二 │   ← 今天放假/调休时右边多一个 休 / 班 徽章
+└──────────────┘
+```
+
+- 悬停显示完整提示：`2026年9月22日 星期二` / `丙午八月十二 · 第 3 周 · 中秋节：放假`
+- 点一下展开完整视图 —— 桌面上那六种样式在弹窗里照常可用
+- 紧凑视图**不受「显示样式」影响**：面板上位置太窄，只有这一行是合适的
+- 桌面上的实例不受影响：Plasma 按组件所在位置（桌面 / 面板）自动选表示层
 
 ## 背景与卡片不透明度
 
@@ -394,8 +418,10 @@ Repeater {
   `Component.onCompleted` 里快照 —— 那样只会拿到空字符串。
 - **要用 `displayedDate` 换月**，不是 `today`。二者独立：`today` 只管高亮判定。
 
-这样五种样式共用同一份 `cells`，换样式不重建日历后端，也没有「换月时读到上个月」的陈旧
-数据问题（原来的做法是从月历视图内部的 `daysModel` 读，一旦那个视图没被实例化就没数据）。
+窗口开成 `weeks: 12`（84 天）：前 42 天就是月历网格那 6 行（月历网格与迷你月历只取前 42 格），
+多出来的部分给「农历详情」往后找节气/农历节日。这样六种样式共用同一份 `cells`，换样式不重建
+日历后端，也没有「换月时读到上个月」的陈旧数据问题（原来的做法是从月历视图内部的
+`daysModel` 读，一旦那个视图没被实例化就没数据）。
 
 ### 8. Layout 会饿死 implicitHeight 为 0 的项
 
@@ -427,6 +453,22 @@ ColumnLayout {
 ```qml
 Qt.formatDate(d, "M月d日") + " " + Qt.locale().dayName(d.getDay(), Locale.ShortFormat)
 ```
+
+### 10. 提示文字写在 `PlasmoidItem` 上，**不要**加 `Plasmoid.` 前缀
+
+```qml
+toolTipMainText: "…"        // ✅ PlasmoidItem 自己的属性
+toolTipSubText: "…"
+// Plasmoid.toolTipMainText: "…"   ❌ non-existent property（附加对象上那两个只读）
+```
+
+附加对象 `Plasmoid` 上有同名的**只读**转发（系统组件的 `Accessible.name: Plasmoid.toolTipMainText`
+就是在读它），所以「读得到」这件事很容易让人以为「写得进去」—— 赋值会让整个组件加载失败，
+报 `Cannot assign to non-existent property "toolTipSubText"`。
+
+顺带两条面板相关的：紧凑视图的尺寸要写 `Layout.minimumWidth` / `Layout.preferredWidth` /
+`Layout.maximumWidth`（只写 `implicit*` 面板会当成默认小方块）；点击展开用
+`root.expanded = !root.expanded`（`PlasmoidItem` 的属性，官方日历组件也这么写）。
 
 ## 已知限制
 

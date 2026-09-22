@@ -28,8 +28,9 @@
     </entry>
     <!-- 桌面上的显示样式：
          month（整月网格，默认）| today（今日）| week（本周）
-         | mini（迷你月历 + 今日）| upcoming（假期倒计时）
-         认不出来的值一律退回 month，配置被手改坏时不会什么都不显示。 -->
+         | mini（迷你月历 + 今日）| upcoming（假期倒计时）| almanac（农历详情）
+         认不出来的值一律退回 month，配置被手改坏时不会什么都不显示。
+         面板（任务栏）里不用这个，固定显示一行紧凑视图。 -->
     <entry name="viewStyle" type="String">
       <default>month</default>
     </entry>
