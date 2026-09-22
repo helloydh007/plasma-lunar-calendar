@@ -86,7 +86,7 @@ PlasmoidItem {
     readonly property string viewStyle: {
         const v = Plasmoid.configuration.viewStyle;
         if (v === "today" || v === "week" || v === "mini" || v === "upcoming"
-                || v === "almanac") {
+                || v === "almanac" || v === "countdown") {
             return v;
         }
         return "month";
@@ -305,6 +305,46 @@ PlasmoidItem {
                                                             root.today.getFullYear(),
                                                             root.today.getMonth() + 1)
 
+    // ══════════════════ 倒计时样式要用的 ══════════════════
+
+    /*
+     * 配置里的倒计时目标，逐条校验后转成统一形状：
+     *   { name, date: Date, mode: "down"|"up", diff }
+     * diff = 今天到目标日的天数：>0 还没到，=0 就是今天，<0 已经过去。
+     *
+     * JSON 解析失败、单条没名字、日期无效 —— 都整条跳过。
+     * 手改坏的配置绝不能把组件弄挂，宁可少显示一条。
+     */
+    readonly property var countdownEntries: {
+        let list = [];
+        try {
+            const parsed = JSON.parse(Plasmoid.configuration.countdowns);
+            if (Array.isArray(parsed)) {
+                list = parsed;
+            }
+        } catch (e) {
+            list = [];
+        }
+        const out = [];
+        for (let i = 0; i < list.length; ++i) {
+            const e = list[i];
+            if (!e || typeof e.name !== "string" || e.name === "") {
+                continue;
+            }
+            const d = TermWeek.parseIsoDate(String(e.date || ""));
+            if (!d) {
+                continue;
+            }
+            out.push({
+                name: e.name,
+                date: d,
+                mode: e.mode === "up" ? "up" : "down",
+                diff: ViewData.daysBetween(root.today, d)
+            });
+        }
+        return out;
+    }
+
     // 接下来几个法定节假日（连续的同名放假日算一段）。最远找 400 天。
     readonly property var upcoming: ViewData.upcomingOffDays(root.today, 400, 6,
                                                              root.holidayOfDate)
@@ -340,6 +380,8 @@ PlasmoidItem {
             return 320;
         case "almanac":
             return 330;
+        case "countdown":
+            return 360;
         }
         return 410;
     }
@@ -489,6 +531,8 @@ PlasmoidItem {
             return styleUpcomingComponent;
         case "almanac":
             return styleAlmanacComponent;
+        case "countdown":
+            return styleCountdownComponent;
         }
         return styleMonthComponent;
     }
@@ -559,6 +603,15 @@ PlasmoidItem {
             nextTerm: root.nextTerm
             nextFestival: root.nextFestival
             monthTerms: root.monthTerms
+            cardOpacity: root.cardOpacity
+        }
+    }
+
+    Component {
+        id: styleCountdownComponent
+
+        StyleCountdown {
+            entries: root.countdownEntries
             cardOpacity: root.cardOpacity
         }
     }

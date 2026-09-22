@@ -1,15 +1,15 @@
 # 农历月历 · Lunar Calendar (KDE Plasma 6)
 
 一个常驻桌面的月历小组件，通过 KDE 官方的 `alternatecalendar` 日历引擎显示中国农历，
-有**六种显示样式**可切换，可放桌面也可放面板，并可选显示**自定义「学期周数」**（以开学日为第 1 周）。
+有**七种显示样式**可切换（含自定义目标的**倒计时卡片**），可放桌面也可放面板，并可选显示**自定义「学期周数」**（以开学日为第 1 周）。
 
 <img src="screenshot.png" width="420" alt="农历月历截图">
 
 > **English:** A desktop calendar plasmoid for KDE Plasma 6 that displays the Chinese lunar
-> calendar (农历). Six interchangeable display styles (full month grid / today card / week
-> strip / mini month + today / holiday countdown / lunar almanac), a one-line compact view
-> for panels, an optional custom term/semester week-number column, statutory-holiday markers
-> (休 / 班), and adjustable background and card opacity. It reuses KDE's own
+> calendar (农历). Seven interchangeable display styles (full month grid / today card / week
+> strip / mini month + today / holiday countdown / lunar almanac / custom countdown cards),
+> a one-line compact view for panels, an optional custom term/semester week-number column,
+> statutory-holiday markers (休 / 班), and adjustable background and card opacity. It reuses KDE's own
 > `alternatecalendar` calendar plugin engine — the same engine behind the Digital Clock's
 > calendar popup — so the lunar data is not reimplemented here, and it shares the
 > calendar-system setting with the system tray clock.
@@ -19,7 +19,7 @@
 - 常驻桌面的月历，每个日期下方显示农历（初一、十五……）与节气（白露、秋分、寒露……）
 - 农历数据来自 KDE 官方引擎（`plasma-calendar-addons` 提供的 `alternatecalendar` 插件），
   与系统托盘时钟共享同一份配置 —— **不是自己算的**
-- **六种显示样式**，设置里切换，尺寸都自适应（详见下节）：
+- **七种显示样式**，设置里切换，尺寸都自适应（详见下节）：
   | 样式 | 看什么 |
   | --- | --- |
   | 整月网格（默认） | 一眼看全一个月 |
@@ -28,6 +28,7 @@
   | 迷你月历 + 今日 | 小月历 + 今天详情，约半格面积 |
   | 假期倒计时 | 接下来的法定节假日与「几天后」 |
   | 农历详情 | 干支纪年与生肖、下个节气/农历节日还有几天 |
+  | 倒计时 | 自己定的目标卡片：「距离考研 88 天」或「开学第 22 天」 |
 - **也能放任务栏**：拖到面板里自动变成一行紧凑视图（`22 八月十二`），点一下展开完整视图
 - **背景与卡片不透明度可调**（0–100%），可以把底板调透、只留内容浮在桌面上
 - **可选的自定义学期周数列**：以指定的开学日为第 1 周，按周递增（详见下节）
@@ -71,13 +72,13 @@ kpackagetool6 --type Plasma/Applet --install .
 kpackagetool6 --type Plasma/Applet --remove io.github.helloydh007.lunarcalendar
 ```
 
-## 显示样式（六种）
+## 显示样式（七种）
 
 在组件上点右键 → 「配置农历月历…」→ **外观** → 「显示样式」，随时切换。
 
-<img src="screenshot-styles.png" width="900" alt="六种显示样式">
+<img src="screenshot-styles.png" width="900" alt="七种显示样式">
 
-左上起：整月网格 · 今日 · 本周 ／ 迷你月历 + 今日 · 假期倒计时 · 农历详情
+左上起：整月网格 · 今日 · 本周 ／ 迷你月历 + 今日 · 假期倒计时 · 农历详情 ／ 倒计时
 （都是 416 × 417 逻辑像素下的实际渲染；图中是浅色主题，实际跟随你的颜色方案）
 
 | 值 | 名字 | 画什么 | 适合 |
@@ -88,6 +89,7 @@ kpackagetool6 --type Plasma/Applet --remove io.github.helloydh007.lunarcalendar
 | `mini` | 迷你月历 + 今日 | 左边小月历（只有日号，今天高亮，节假日一个色点）+ 右边今天详情 | 面积约为整月网格的一半 |
 | `upcoming` | 假期倒计时 | 接下来的法定节假日列表：节日名 / 日期 / `3 天后`，还有今天的摘要 | 回答「最近的假是哪天」 |
 | `almanac` | 农历详情 | 干支纪年与生肖（`丙午年 · 马`）+ 农历月日作主角 + 下个节气还有几天 + 下一个农历节日 + 本月两个节气 | 回答「今天是什么农历日子」 |
+| `countdown` | 倒计时 | 自己定的目标：第 1 条大卡，其余小行；支持「距离 xxx 还有 N 天」与「xxx 第 N 天」两种数法 | 考试、纪念日、项目截止 |
 
 「农历详情」里的农历节日是从农历日期认出来的（`八月十五` → 中秋节），所以它能认出**非法定**
 的节日（七夕、重阳、腊八、小年、龙抬头）。往后找的范围是**当前月 + 之后 84 天**；窗口里
@@ -99,10 +101,28 @@ kpackagetool6 --type Plasma/Applet --remove io.github.helloydh007.lunarcalendar
 - **`休` / `班` 徽章不受透明度影响** —— 那是信息，跟着淡就会糊在壁纸上读不清
 - 文字放不下就省略，不叠印；列表放不下就少显示几行，并在下面说明还有几个没显示
 - 高度不够时按「先舍弃次要信息」的顺序让步（例如农历详情会先去「本月节气」、再去倒计时块）
-- 六种样式共用同一份日期数据（见「实现要点」第 7 条），所以换样式不会改变农历的准确性
+- 除「倒计时」外，其余样式共用同一份日期数据（见「实现要点」第 7 条），换样式不会改变农历的准确性
 
 「假期倒计时」不看「法定节假日」那个开关（它整块就是这个内容）；`休`/`班` 标记开关只影响
 另外五种样式里的标记。
+
+## 倒计时目标（自定义倒计时卡片）
+
+「倒计时」样式显示的是**你自己定的日期**，和农历/节假日无关：
+
+- **倒计时**：填一个将来的日子，显示「距离 考研 88 天」；过了那天变成灰字的「已过 N 天」，
+  当天显示「就是今天」
+- **正向**：从某天数起，那天算第 1 天 —— 「开学 第 22 天」「在一起 第 100 天」；
+  日子还没到时灰字显示「还有 N 天（尚未开始）」
+
+**配置方式**：右键组件 →「配置农历月历…」→ **倒计时** → 「添加一条」：
+
+- 名称 + 日期（`yyyy-MM-dd`，无效日期会标红并提示）
+- 每行右侧实时预览「还有 N 天 / 第 N 天」，改完点「应用」
+- 没填完的行不会保存；删除也在这一页
+
+显示条数随组件高度自适应：放不下时少显示几行，底部注明「还有 N 个目标未显示」。
+第 1 条目标是大卡，其余排成小行（想突出哪个就把拖到第一位）。
 
 ## 放在面板（任务栏）里
 
@@ -115,7 +135,7 @@ kpackagetool6 --type Plasma/Applet --remove io.github.helloydh007.lunarcalendar
 ```
 
 - 悬停显示完整提示：`2026年9月22日 星期二` / `丙午八月十二 · 第 3 周 · 中秋节：放假`
-- 点一下展开完整视图 —— 桌面上那六种样式在弹窗里照常可用
+- 点一下展开完整视图 —— 桌面上那七种样式在弹窗里照常可用
 - 紧凑视图**不受「显示样式」影响**：面板上位置太窄，只有这一行是合适的
 - 桌面上的实例不受影响：Plasma 按组件所在位置（桌面 / 面板）自动选表示层
 
@@ -419,7 +439,7 @@ Repeater {
 - **要用 `displayedDate` 换月**，不是 `today`。二者独立：`today` 只管高亮判定。
 
 窗口开成 `weeks: 12`（84 天）：前 42 天就是月历网格那 6 行（月历网格与迷你月历只取前 42 格），
-多出来的部分给「农历详情」往后找节气/农历节日。这样六种样式共用同一份 `cells`，换样式不重建
+多出来的部分给「农历详情」往后找节气/农历节日。这样各农历样式共用同一份 `cells`，换样式不重建
 日历后端，也没有「换月时读到上个月」的陈旧数据问题（原来的做法是从月历视图内部的
 `daysModel` 读，一旦那个视图没被实例化就没数据）。
 
